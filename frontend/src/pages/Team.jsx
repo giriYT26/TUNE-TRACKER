@@ -46,7 +46,7 @@ function teamReducer(state, action) {
       return { ...state, teamList: action.teams }
     case 'BUZZER_UPDATE': {
       const myEvent = action.buzzerOrder.find(
-        (e) => e.username === state.username
+        (e) => e.team_name === state.teamName
       )
       return {
         ...state,
@@ -270,162 +270,139 @@ export default function Team() {
     }
   }, [connected, send])
 
-  const inputStyle = { padding: '0.5rem', width: '250px', marginBottom: '0.75rem' }
+  const inputStyle = { padding: '0.5rem', width: '250px', maxWidth: '80vw', marginBottom: '0.75rem', boxSizing: 'border-box' }
   const btnStyle = { padding: '0.5rem 1.5rem' }
 
-  // Screen 1: Choose
-  if (state.screen === 'choose') {
-    return (
-      <div style={{ padding: '2rem', textAlign: 'center' }}>
-        <h1>TUNE TRACKER</h1>
-        <div style={{ marginTop: '2rem' }}>
-          <button
-            onClick={() => handleChoose('create')}
-            style={{ padding: '1rem 2rem', fontSize: '1.1rem', marginBottom: '1rem', display: 'block', width: '250px', marginLeft: 'auto', marginRight: 'auto' }}
-          >
-            CREATE TEAM
-          </button>
-          <button
-            onClick={() => handleChoose('join')}
-            style={{ padding: '1rem 2rem', fontSize: '1.1rem', display: 'block', width: '250px', marginLeft: 'auto', marginRight: 'auto' }}
-          >
-            JOIN TEAM
-          </button>
-        </div>
-      </div>
-    )
-  }
+  return (
+    <>
+      <style>{`
+        .team-root { padding: 2rem; text-align: center; }
+        .team-title { font-size: 2rem; margin-bottom: 0.5rem; }
+        .team-subtitle { font-size: 1.25rem; margin-bottom: 0.5rem; }
+        .team-btn-big { padding: 1rem 2rem; font-size: 1.1rem; margin-bottom: 1rem; display: block; width: 250px; max-width: 80vw; margin-left: auto; margin-right: auto; }
+        .buzz-btn { font-size: 2rem; padding: 1rem 3rem; border: none; border-radius: 8px; color: #fff; }
+        .buzz-btn:disabled { cursor: not-allowed; opacity: 0.5; background-color: #888 !important; }
+        .buzz-btn:not(:disabled) { cursor: pointer; background-color: #ef4444; }
+        .buzz-btn:not(:disabled):active { transform: scale(0.95); }
+        .team-search-list { max-height: 200px; overflow-y: auto; border: 1px solid #555; border-radius: 4px; margin-bottom: 0.75rem; width: 250px; max-width: 80vw; margin-left: auto; margin-right: auto; }
+        .team-search-item { padding: 0.5rem 0.75rem; cursor: pointer; border-bottom: 1px solid #444; }
+        .team-error { color: red; margin-top: 0.5rem; }
+        @media (max-width: 480px) {
+          .team-root { padding: 1rem; }
+          .team-title { font-size: 1.5rem; }
+          .team-subtitle { font-size: 1rem; }
+          .buzz-btn { font-size: 1.5rem; padding: 0.8rem 2rem; }
+          .team-btn-big { padding: 0.8rem 1.5rem; font-size: 1rem; width: 200px; }
+        }
+      `}</style>
 
-  // Screen 2: Team Name (Create or Join)
-  if (state.screen === 'teamname') {
-    return (
-      <div style={{ padding: '2rem', textAlign: 'center' }}>
-        <h1>TUNE TRACKER</h1>
-        {chosenAction === 'create' ? (
+      <div className="team-root">
+        {/* Screen 1: Choose */}
+        {state.screen === 'choose' && (
           <>
-            <p>Enter Team Name</p>
-            <input
-              type="text"
-              placeholder="Team Name"
-              value={state.teamName}
-              onChange={(e) => dispatch({ type: 'SET_TEAM_NAME', name: e.target.value })}
-              onKeyDown={(e) => e.key === 'Enter' && handleJoin()}
-              style={inputStyle}
-            />
-          </>
-        ) : (
-          <>
-            <p>Select or search for a team to join</p>
-            <input
-              type="text"
-              placeholder="Search teams..."
-              value={teamSearch}
-              onChange={(e) => setTeamSearch(e.target.value)}
-              style={{ ...inputStyle, marginBottom: '0.5rem' }}
-            />
-            <div style={{ maxHeight: '200px', overflowY: 'auto', border: '1px solid #555', borderRadius: '4px', marginBottom: '0.75rem', width: '250px', marginLeft: 'auto', marginRight: 'auto' }}>
-              {filteredTeams.length === 0 ? (
-                <p style={{ padding: '0.75rem', color: '#888', margin: 0 }}>
-                  {state.teamList.length === 0 ? 'No teams available' : 'No matching teams'}
-                </p>
-              ) : (
-                filteredTeams.map((t) => (
-                  <div
-                    key={t}
-                    onClick={() => dispatch({ type: 'SET_TEAM_NAME', name: t })}
-                    style={{
-                      padding: '0.5rem 0.75rem',
-                      cursor: 'pointer',
-                      borderBottom: '1px solid #444',
-                      backgroundColor: state.teamName === t ? '#3b82f6' : 'transparent',
-                      color: state.teamName === t ? '#fff' : '#ccc',
-                    }}
-                  >
-                    {t}
-                  </div>
-                ))
-              )}
+            <h1 className="team-title">TUNE TRACKER</h1>
+            <div style={{ marginTop: '2rem' }}>
+              <button className="team-btn-big" onClick={() => handleChoose('create')}>CREATE TEAM</button>
+              <button className="team-btn-big" onClick={() => handleChoose('join')}>JOIN TEAM</button>
             </div>
-            {state.teamName && (
-              <p style={{ color: '#aaa', margin: '0 0 0.5rem 0' }}>
-                Selected: <strong>{state.teamName}</strong>
-              </p>
-            )}
-            {!state.teamName && (
-              <p style={{ color: '#888', margin: '0 0 0.5rem 0' }}>
-                Or type a team name below
-              </p>
-            )}
-            <input
-              type="text"
-              placeholder="Team Name"
-              value={state.teamName}
-              onChange={(e) => dispatch({ type: 'SET_TEAM_NAME', name: e.target.value })}
-              onKeyDown={(e) => e.key === 'Enter' && handleJoin()}
-              style={inputStyle}
-            />
           </>
         )}
-        <br />
-        <button onClick={handleJoin} style={{ ...btnStyle, marginRight: '0.5rem' }}>
-          {chosenAction === 'create' ? 'CREATE' : 'JOIN'}
-        </button>
-        <button onClick={handleBack} style={btnStyle}>BACK</button>
-        {joinError && <p style={{ color: 'red', marginTop: '0.5rem' }}>{joinError}</p>}
-      </div>
-    )
-  }
 
-  // Screen 3: Username
-  if (state.screen === 'username') {
-    return (
-      <div style={{ padding: '2rem', textAlign: 'center' }}>
-        <h2>{state.teamName}</h2>
-        <p>Enter Username</p>
-        <input
-          type="text"
-          placeholder="Username"
-          value={state.username}
-          onChange={(e) => dispatch({ type: 'SET_USERNAME', name: e.target.value })}
-          onKeyDown={(e) => e.key === 'Enter' && handleSubmitUsername()}
-          style={inputStyle}
-        />
-        <br />
-        <button onClick={handleSubmitUsername} style={btnStyle}>SUBMIT</button>
-        <br />
-        <button onClick={handleBack} style={{ ...btnStyle, marginTop: '0.5rem' }}>BACK</button>
-        {joinError && <p style={{ color: 'red', marginTop: '0.5rem' }}>{joinError}</p>}
-      </div>
-    )
-  }
+        {/* Screen 2: Team Name */}
+        {state.screen === 'teamname' && (
+          <>
+            <h1 className="team-title">TUNE TRACKER</h1>
+            {chosenAction === 'create' ? (
+              <>
+                <p>Enter Team Name</p>
+                <input type="text" placeholder="Team Name" value={state.teamName}
+                  onChange={(e) => dispatch({ type: 'SET_TEAM_NAME', name: e.target.value })}
+                  onKeyDown={(e) => e.key === 'Enter' && handleJoin()} style={inputStyle} />
+              </>
+            ) : (
+              <>
+                <p>Select or search for a team to join</p>
+                <input type="text" placeholder="Search teams..." value={teamSearch}
+                  onChange={(e) => setTeamSearch(e.target.value)}
+                  style={{ ...inputStyle, marginBottom: '0.5rem' }} />
+                <div className="team-search-list">
+                  {filteredTeams.length === 0 ? (
+                    <p style={{ padding: '0.75rem', color: '#888', margin: 0 }}>
+                      {state.teamList.length === 0 ? 'No teams available' : 'No matching teams'}
+                    </p>
+                  ) : (
+                    filteredTeams.map((t) => (
+                      <div key={t} className="team-search-item"
+                        onClick={() => dispatch({ type: 'SET_TEAM_NAME', name: t })}
+                        style={{
+                          backgroundColor: state.teamName === t ? '#3b82f6' : 'transparent',
+                          color: state.teamName === t ? '#fff' : '#ccc',
+                        }}>
+                        {t}
+                      </div>
+                    ))
+                  )}
+                </div>
+                {state.teamName && (
+                  <p style={{ color: '#aaa', margin: '0 0 0.5rem 0' }}>Selected: <strong>{state.teamName}</strong></p>
+                )}
+                {!state.teamName && (
+                  <p style={{ color: '#888', margin: '0 0 0.5rem 0' }}>Or type a team name below</p>
+                )}
+                <input type="text" placeholder="Team Name" value={state.teamName}
+                  onChange={(e) => dispatch({ type: 'SET_TEAM_NAME', name: e.target.value })}
+                  onKeyDown={(e) => e.key === 'Enter' && handleJoin()} style={inputStyle} />
+              </>
+            )}
+            <br />
+            <button onClick={handleJoin} style={{ ...btnStyle, marginRight: '0.5rem' }}>
+              {chosenAction === 'create' ? 'CREATE' : 'JOIN'}
+            </button>
+            <button onClick={handleBack} style={btnStyle}>BACK</button>
+            {joinError && <p className="team-error">{joinError}</p>}
+          </>
+        )}
 
-  // Screen 4: Buzzer
-  return (
-    <div style={{ padding: '2rem', textAlign: 'center' }}>
-      <h2>{state.teamName}</h2>
-      <p>Round: {state.roundName}</p>
-      <p style={{ color: state.roundState === 'Active' ? 'green' : '#888' }}>
-        {state.roundState === 'Active' ? '🟢 Buzzer Active' : '⏸ Buzzer Inactive'}
-      </p>
-      <p>Status: {state.myStatus}</p>
-      {state.buzzerPosition !== null && <p>Position: #{state.buzzerPosition}</p>}
-      <button
-        onClick={handleBuzz}
-        disabled={state.buzzerDisabled || state.roundState !== 'Active'}
-        style={{
-          fontSize: '2rem',
-          padding: '1rem 3rem',
-          backgroundColor: state.buzzerDisabled || state.roundState !== 'Active' ? '#888' : '#ef4444',
-          color: '#fff',
-          border: 'none',
-          borderRadius: '8px',
-          cursor: state.buzzerDisabled || state.roundState !== 'Active' ? 'not-allowed' : 'pointer',
-          opacity: state.buzzerDisabled || state.roundState !== 'Active' ? 0.5 : 1,
-        }}
-      >
-        BUZZ
-      </button>
-      {state.buzzerDisabled && <p style={{ color: 'green', fontWeight: 'bold' }}>✓ BUZZER REGISTERED</p>}
-    </div>
+        {/* Screen 3: Username */}
+        {state.screen === 'username' && (
+          <>
+            <h2 className="team-subtitle">{state.teamName}</h2>
+            <p>Enter Username</p>
+            <input type="text" placeholder="Username" value={state.username}
+              onChange={(e) => dispatch({ type: 'SET_USERNAME', name: e.target.value })}
+              onKeyDown={(e) => e.key === 'Enter' && handleSubmitUsername()} style={inputStyle} />
+            <br />
+            <button onClick={handleSubmitUsername} style={btnStyle}>SUBMIT</button>
+            <br />
+            <button onClick={handleBack} style={{ ...btnStyle, marginTop: '0.5rem' }}>BACK</button>
+            {joinError && <p className="team-error">{joinError}</p>}
+          </>
+        )}
+
+        {/* Screen 4: Buzzer */}
+        {state.screen === 'buzzer' && (
+          <>
+            <h2 className="team-subtitle">{state.teamName}</h2>
+            <p>Round: {state.roundName}</p>
+            <p style={{ color: state.roundState === 'Active' ? 'green' : '#888' }}>
+              {state.roundState === 'Active' ? '🟢 Buzzer Active' : '⏸ Buzzer Inactive'}
+            </p>
+            <p>Status: {state.myStatus}</p>
+            {state.buzzerPosition !== null && <p>Position: #{state.buzzerPosition}</p>}
+            <button
+              className="buzz-btn"
+              onClick={handleBuzz}
+              disabled={state.buzzerDisabled || state.roundState !== 'Active'}
+              style={{
+                backgroundColor: state.buzzerDisabled || state.roundState !== 'Active' ? '#888' : '#ef4444',
+              }}
+            >
+              BUZZ
+            </button>
+            {state.buzzerDisabled && <p style={{ color: 'green', fontWeight: 'bold' }}>✓ BUZZER REGISTERED</p>}
+          </>
+        )}
+      </div>
+    </>
   )
 }

@@ -131,11 +131,12 @@ impl AppState {
         if round.state != RoundState::Active {
             return None;
         }
-        if round.buzzer_order.iter().any(|e| e.username == username) {
-            return None;
-        }
         let users = self.connected_users.read().await;
         let team_name = users.get(&username)?.clone();
+        drop(users);
+        if round.buzzer_order.iter().any(|e| e.team_name == team_name) {
+            return None;
+        }
         let position = round.buzzer_order.len() + 1;
         let event = BuzzerEvent {
             team_name,
