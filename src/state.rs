@@ -3,21 +3,11 @@ use std::collections::HashMap;
 use tokio::sync::{broadcast, RwLock};
 use uuid::Uuid;
 
-pub type TeamId = Uuid;
-
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum TeamStatus {
     Waiting,
     Answering,
     Disqualified,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TeamMember {
-    pub username: String,
-    pub team_name: String,
-    pub status: TeamStatus,
-    pub warning_count: u8,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -52,7 +42,6 @@ pub enum ServerMessage {
     TeamStatus { team_name: String, username: String, status: TeamStatus, warning_count: u8 },
     TeamJoined { team_name: String, usernames: Vec<String> },
     ViolationReport { team_name: String, username: String, kind: String, warning_count: u8 },
-    Error { message: String },
 }
 
 #[derive(Debug, Deserialize)]
