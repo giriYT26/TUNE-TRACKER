@@ -135,6 +135,7 @@ export default function Host() {
         <button onClick={() => sendControl('start')}>START BUZZER</button>
         <button onClick={() => sendControl('lock')}>LOCK BUZZER</button>
         <button onClick={() => sendControl('reset')}>RESET BUZZER</button>
+        <button onClick={() => sendControl('reset')}>NEXT</button>
         <span style={{
           padding: '0.5rem 1rem',
           borderRadius: '4px',

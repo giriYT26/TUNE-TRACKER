@@ -8,9 +8,10 @@ axum = { version = "0.7", features = ["ws"] }
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-uuid = { version = "1", features = ["v4"] }
+uuid = { version = "1", features = ["v4", "serde"] }
 chrono = { version = "0.4", features = ["serde"] }
 tower-http = { version = "0.5", features = ["fs"] }
+futures = "0.3"
 
 # Uncomment when you get to persistence (Phase 6 in workflow.md)
 # sqlx = { version = "0.7", features = ["sqlite", "runtime-tokio"] }
