@@ -65,6 +65,15 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
             .await;
     }
 
+    let locked = *state.teams_locked.read().await;
+    let _ = sender
+        .send(Message::Text(
+            serde_json::to_string(&ServerMessage::TeamLock { locked })
+                .unwrap()
+                .into(),
+        ))
+        .await;
+
     let mut team_name: Option<String> = None;
     let mut username: Option<String> = None;
 

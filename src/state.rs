@@ -45,6 +45,8 @@ pub enum ServerMessage {
     TeamStatus { team_name: String, username: String, status: TeamStatus, warning_count: u8 },
     TeamJoined { team_name: String, usernames: Vec<String> },
     ViolationReport { team_name: String, username: String, kind: String, warning_count: u8 },
+    Kicked { team_name: String, username: String },
+    TeamLock { locked: bool },
 }
 
 #[derive(Debug, Deserialize)]
@@ -61,7 +63,10 @@ pub enum ClientMessage {
     NextQuestion,
     SetRoundName { name: String },
     Disqualify { team_name: String, username: Option<String> },
+    KickUser { team_name: String, username: String },
     ResetViolations,
+    LockTeams,
+    UnlockTeams,
     Leave,
 }
 
@@ -72,6 +77,7 @@ pub struct AppState {
     pub connected_users: RwLock<HashMap<String, String>>,
     pub warning_counts: RwLock<HashMap<String, u8>>,
     pub disqualified_users: RwLock<HashSet<String>>,
+    pub teams_locked: RwLock<bool>,
 }
 
 impl AppState {
@@ -90,10 +96,16 @@ impl AppState {
             connected_users: RwLock::new(HashMap::new()),
             warning_counts: RwLock::new(HashMap::new()),
             disqualified_users: RwLock::new(HashSet::new()),
+            teams_locked: RwLock::new(false),
         }
     }
 
     pub async fn join_team(&self, team_name: String, action: String) -> Result<(), String> {
+        let locked = *self.teams_locked.read().await;
+        if locked {
+            return Err("Teams are locked by the host".to_string());
+        }
+
         let teams = self.connected_teams.read().await;
         let team_exists = teams.contains_key(&team_name);
         drop(teams);
@@ -279,6 +291,23 @@ impl AppState {
         counts.clear();
         let mut dq = self.disqualified_users.write().await;
         dq.clear();
+    }
+
+    pub async fn lock_teams(&self) {
+        let mut locked = self.teams_locked.write().await;
+        *locked = true;
+        let _ = self.tx.send(ServerMessage::TeamLock { locked: true });
+    }
+
+    pub async fn unlock_teams(&self) {
+        let mut locked = self.teams_locked.write().await;
+        *locked = false;
+        let _ = self.tx.send(ServerMessage::TeamLock { locked: false });
+    }
+
+    pub async fn kick_user(&self, team_name: String, username: String) {
+        self.remove_user_with_broadcast(&username).await;
+        let _ = self.tx.send(ServerMessage::Kicked { team_name, username });
     }
 
     pub async fn remove_user_with_broadcast(&self, username: &str) {

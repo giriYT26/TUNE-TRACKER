@@ -53,6 +53,8 @@ function hostReducer(state, action) {
     }
     case 'CLEAR_VIOLATIONS':
       return { ...state, violations: [] }
+    case 'TEAM_LOCK':
+      return { ...state, teamsLocked: action.locked }
     default:
       return state
   }
@@ -73,6 +75,7 @@ export default function Host() {
   const [roundNameInput, setRoundNameInput] = useState('Round 1')
   const [confirmReset, setConfirmReset] = useState(false)
   const [confirmClear, setConfirmClear] = useState(false)
+  const [confirmKick, setConfirmKick] = useState(null)
 
   const [state, dispatch] = useReducer(hostReducer, {
     buzzerOrder: [],
@@ -80,6 +83,7 @@ export default function Host() {
     roundName: 'Round 1',
     teams: {},
     violations: [],
+    teamsLocked: false,
   })
 
   const handleServerMessage = useCallback((msg) => {
@@ -113,6 +117,9 @@ export default function Host() {
           warningCount: msg.warning_count,
         })
         break
+      case 'team_lock':
+        dispatch({ type: 'TEAM_LOCK', locked: msg.locked })
+        break
     }
   }, [])
 
@@ -132,6 +139,11 @@ export default function Host() {
     send({ type: 'disqualify', team_name: teamName, username: username || null })
   }
 
+  const handleKick = (teamName, username) => {
+    setConfirmKick(null)
+    send({ type: 'kick_user', team_name: teamName, username })
+  }
+
   const handleReset = () => {
     setConfirmReset(false)
     sendControl('reset')
@@ -141,6 +153,10 @@ export default function Host() {
     setConfirmClear(false)
     dispatch({ type: 'CLEAR_VIOLATIONS' })
     send({ type: 'reset_violations' })
+  }
+
+  const handleToggleLockTeams = () => {
+    send({ type: state.teamsLocked ? 'unlock_teams' : 'lock_teams' })
   }
 
   const handleLogout = () => {
@@ -168,7 +184,7 @@ export default function Host() {
         .host-root {
           min-height: 100vh;
           min-height: 100dvh;
-          background: #0a0a0a url('/host_bg.jpeg') center/cover no-repeat;
+          background: #0f172a;
           padding: 1.5rem;
           font-family: system-ui, -apple-system, sans-serif;
         }
@@ -207,6 +223,16 @@ export default function Host() {
           font-weight: 700;
           font-size: 0.85rem;
         }
+        .lock-badge {
+          padding: 0.35rem 0.8rem;
+          border-radius: 20px;
+          font-weight: 600;
+          font-size: 0.8rem;
+          cursor: pointer;
+          border: none;
+          transition: all 0.2s;
+        }
+        .lock-badge:hover { opacity: 0.85; }
         .logout-btn {
           padding: 0.4rem 1rem;
           background: rgba(255,255,255,0.06);
@@ -290,7 +316,7 @@ export default function Host() {
           font-size: 0.95rem;
           color: #f3f4f6;
         }
-        .card-header .count { color: #64748b; fontWeight: 400; fontSize: 0.8rem; }
+        .card-header .count { color: #64748b; font-weight: 400; font-size: 0.8rem; }
         .empty-row {
           padding: 1.5rem;
           text-align: center;
@@ -328,6 +354,7 @@ export default function Host() {
           margin-bottom: 0.4rem;
         }
         .team-card-name { font-weight: 700; color: #f3f4f6; font-size: 0.9rem; }
+        .team-card-actions { display: flex; gap: 0.35rem; }
         .dq-btn {
           padding: 0.2rem 0.5rem;
           background: #dc2626;
@@ -345,9 +372,20 @@ export default function Host() {
           padding: 0.25rem 0 0.25rem 0.75rem;
         }
         .member-name { color: #94a3b8; font-size: 0.85rem; }
+        .member-actions { display: flex; gap: 0.3rem; }
         .remove-btn {
           padding: 0.15rem 0.4rem;
           background: #d97706;
+          color: #fff;
+          border: none;
+          border-radius: 3px;
+          cursor: pointer;
+          font-size: 0.7rem;
+          font-weight: 600;
+        }
+        .kick-btn {
+          padding: 0.15rem 0.4rem;
+          background: #7c3aed;
           color: #fff;
           border: none;
           border-radius: 3px;
@@ -388,7 +426,7 @@ export default function Host() {
           font-weight: 600;
         }
         .clear-btn:hover { background: rgba(239,68,68,0.25); }
-        .violation-list { max-height: 180px; overflow-y: auto; }
+        .violation-list { max-height: 300px; overflow-y: auto; }
         .violation-item {
           padding: 0.5rem 1rem;
           border-bottom: 1px solid rgba(148,163,184,0.05);
@@ -437,6 +475,12 @@ export default function Host() {
               <span className="round-badge" style={{ backgroundColor: roundColor[state.roundState] || '#6b7280' }}>
                 {state.roundState}
               </span>
+              <button onClick={handleToggleLockTeams} className="lock-badge" style={{
+                backgroundColor: state.teamsLocked ? 'rgba(239,68,68,0.2)' : 'rgba(34,197,94,0.2)',
+                color: state.teamsLocked ? '#f87171' : '#4ade80',
+              }}>
+                {state.teamsLocked ? '🔒 Teams Locked' : '🔓 Teams Open'}
+              </button>
               <button onClick={handleLogout} className="logout-btn">Logout</button>
             </div>
           </div>
@@ -519,12 +563,17 @@ export default function Host() {
                   <div key={name} className="team-card">
                     <div className="team-card-header">
                       <span className="team-card-name">{name}</span>
-                      <button onClick={() => handleDisqualify(name, null)} className="dq-btn">Disqualify</button>
+                      <div className="team-card-actions">
+                        <button onClick={() => handleDisqualify(name, null)} className="dq-btn">Disqualify</button>
+                      </div>
                     </div>
                     {usernames.map((u) => (
                       <div key={u} className="member-row">
                         <span className="member-name">{u}</span>
-                        <button onClick={() => handleDisqualify(name, u)} className="remove-btn">Remove</button>
+                        <div className="member-actions">
+                          <button onClick={() => handleDisqualify(name, u)} className="remove-btn">Remove</button>
+                          <button onClick={() => setConfirmKick({ teamName: name, username: u })} className="kick-btn">Kick</button>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -584,6 +633,21 @@ export default function Host() {
             <div className="confirm-actions">
               <button className="confirm-yes" onClick={handleClearViolations}>Clear</button>
               <button className="confirm-no" onClick={() => setConfirmClear(false)}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Kick Confirmation */}
+      {confirmKick && (
+        <div className="confirm-overlay" onClick={() => setConfirmKick(null)}>
+          <div className="confirm-dialog" onClick={(e) => e.stopPropagation()}>
+            <div className="warn-icon">🦶</div>
+            <p>Kick {confirmKick.username}?</p>
+            <div className="sub">They will be disconnected from team {confirmKick.teamName}.</div>
+            <div className="confirm-actions">
+              <button className="confirm-yes" onClick={() => handleKick(confirmKick.teamName, confirmKick.username)}>Kick</button>
+              <button className="confirm-no" onClick={() => setConfirmKick(null)}>Cancel</button>
             </div>
           </div>
         </div>

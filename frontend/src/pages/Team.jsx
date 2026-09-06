@@ -1,5 +1,6 @@
 import { useState, useEffect, useReducer, useCallback, useRef } from 'react'
 import { useWebSocket } from '../hooks/useWebSocket'
+import ShapeGrid from '../components/ShapeGrid'
 
 const SESSION_KEY = 'teamSession'
 
@@ -59,6 +60,8 @@ function teamReducer(state, action) {
       return { ...state, menuOpen: !state.menuOpen }
     case 'CLOSE_MENU':
       return { ...state, menuOpen: false }
+    case 'SET_TEAM_LOCK':
+      return { ...state, teamsLocked: action.locked }
     case 'BUZZER_UPDATE': {
       const myEvent = action.buzzerOrder.find(
         (e) => e.team_name === state.teamName
@@ -110,6 +113,7 @@ function teamReducer(state, action) {
         teamBuzzTime: null,
         buzzerOrder: [],
         menuOpen: false,
+        teamsLocked: state.teamsLocked,
       }
     default:
       return state
@@ -137,6 +141,7 @@ function getInitialState() {
       teamBuzzTime: saved.teamBuzzTime ?? null,
       buzzerOrder: [],
       menuOpen: false,
+      teamsLocked: false,
     }
   }
   return {
@@ -157,6 +162,7 @@ function getInitialState() {
     teamBuzzTime: null,
     buzzerOrder: [],
     menuOpen: false,
+    teamsLocked: false,
   }
 }
 
@@ -229,6 +235,16 @@ export default function Team() {
         case 'team_status':
           if (msg.username === state.username) {
             dispatch({ type: 'SET_STATUS', status: msg.status })
+          }
+          break
+        case 'team_lock':
+          dispatch({ type: 'SET_TEAM_LOCK', locked: msg.locked })
+          break
+        case 'kicked':
+          if (msg.username === state.username) {
+            dispatch({ type: 'RESET_SESSION' })
+            clearSession()
+            setJoinError('You have been kicked from the team.')
           }
           break
       }
@@ -317,13 +333,6 @@ export default function Team() {
     clearSession()
   }
 
-  const handleBack = () => {
-    dispatch({ type: 'RESET_SESSION' })
-    setJoinError('')
-    setCreatingTeam(false)
-    clearSession()
-  }
-
   useEffect(() => {
     if (state.screen === 'choose') {
       send({ type: 'get_teams' })
@@ -384,7 +393,6 @@ export default function Team() {
         .team-title { font-size: 2rem; margin-bottom: 0.5rem; }
         .team-subtitle { font-size: 1.25rem; margin-bottom: 0.5rem; }
         .team-btn-big { padding: 1rem 2rem; font-size: 1.1rem; margin-bottom: 1rem; display: block; width: 250px; max-width: 80vw; margin-left: auto; margin-right: auto; }
-        .lobby { max-width: 400px; margin: 0 auto; }
         .lobby-create-btn {
           display: flex; align-items: center; justify-content: center; gap: 0.5rem;
           width: 100%; padding: 0.75rem 1rem; margin-bottom: 1.5rem;
@@ -424,6 +432,36 @@ export default function Team() {
         .lobby-team-size { color: #94a3b8; font-size: 0.8rem; font-variant-numeric: tabular-nums; }
         .lobby-team-full { color: #64748b; font-size: 0.75rem; }
         .lobby-empty { color: #475569; font-size: 0.85rem; text-align: center; padding: 2rem 0; }
+        .lobby-bg { position: relative; min-height: 100vh; min-height: 100dvh; }
+        .lobby-bg-grid { position: fixed; inset: 0; z-index: 0; }
+        .lobby { position: relative; z-index: 1; max-width: 400px; margin: 0 auto; padding: 2rem 0; }
+        .lobby-locked-banner {
+          padding: 0.6rem 1rem; margin-bottom: 1rem;
+          background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.3);
+          border-radius: 8px; color: #f87171; font-size: 0.85rem; font-weight: 600; text-align: center;
+        }
+        .lobby-team-item.locked { opacity: 0.5; cursor: not-allowed; pointer-events: none; }
+        .lobby-rules {
+          margin-top: 1.5rem;
+          background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(12px);
+          border: 1px solid rgba(148, 163, 184, 0.12);
+          border-radius: 10px; overflow: hidden;
+        }
+        .lobby-rules-header {
+          padding: 0.6rem 1rem;
+          border-bottom: 1px solid rgba(148,163,184,0.1);
+          font-weight: 700; font-size: 0.9rem; color: #a78bfa;
+        }
+        .lobby-rules-list {
+          padding: 0.75rem 1rem 0.75rem 1.5rem;
+          margin: 0; text-align: left;
+          max-height: 200px; overflow-y: auto;
+        }
+        .lobby-rules-list li {
+          color: #94a3b8; font-size: 0.8rem; line-height: 1.6;
+          margin-bottom: 0.25rem;
+        }
+        .lobby-rules-list li:last-child { margin-bottom: 0; }
         .confirm-overlay {
           position: fixed; inset: 0; z-index: 20;
           background: rgba(0,0,0,0.7); backdrop-filter: blur(4px);
@@ -538,40 +576,73 @@ export default function Team() {
       <div className={`team-root${state.screen === 'buzzer' ? ' buzzer-active' : ''}`}>
         {/* Screen 1: Lobby */}
         {state.screen === 'choose' && (
-          <div className="lobby">
-            <h1 className="team-title">TUNE TRACKER</h1>
+          <div className="lobby-bg">
+            <div className="lobby-bg-grid">
+              <ShapeGrid
+                direction="diagonal"
+                speed={0.13}
+                borderColor="#634599"
+                hoverFillColor="#222"
+                shape="hexagon"
+                hoverTrailAmount={5}
+                squareSize={46}
+              />
+            </div>
+            <div className="lobby">
+              <h1 className="team-title">TUNE TRACKER</h1>
 
-            {creatingTeam ? (
-              <div className="lobby-create-form">
-                <input type="text" placeholder="Team Name" value={state.teamName}
-                  onChange={(e) => dispatch({ type: 'SET_TEAM_NAME', name: e.target.value })}
-                  onKeyDown={(e) => e.key === 'Enter' && handleCreateTeam()} autoFocus />
-                <div className="lobby-create-actions">
-                  <button className="create-submit" onClick={handleCreateTeam}>CREATE</button>
-                  <button className="create-cancel" onClick={() => { setCreatingTeam(false); dispatch({ type: 'SET_TEAM_NAME', name: '' }); setJoinError('') }}>BACK</button>
-                </div>
-                {joinError && <p style={{ color: '#f87171', fontSize: '0.8rem', margin: '0.5rem 0 0 0' }}>{joinError}</p>}
-              </div>
-            ) : (
-              <button className="lobby-create-btn" onClick={() => { setCreatingTeam(true); setJoinError('') }}>
-                <span style={{ fontSize: '1.2rem' }}>+</span> CREATE TEAM
-              </button>
-            )}
-
-            <div className="lobby-section-title">TEAMS ({state.teamList.length})</div>
-            <div className="lobby-team-list">
-              {state.teamList.length === 0 ? (
-                <div className="lobby-empty">No teams yet</div>
-              ) : (
-                state.teamList.map((t) => (
-                  <div key={t.name} className="lobby-team-item" onClick={() => handleJoinTeam(t.name)}>
-                    <span className="lobby-team-name">{t.name}</span>
-                    <span className={t.size >= t.limit ? 'lobby-team-full' : 'lobby-team-size'}>
-                      {t.size}/{t.limit}{t.size >= t.limit ? ' (full)' : ''}
-                    </span>
-                  </div>
-                ))
+              {state.teamsLocked && (
+                <div className="lobby-locked-banner">🔒 Teams are locked by the host</div>
               )}
+
+              {!state.teamsLocked && (creatingTeam ? (
+                <div className="lobby-create-form">
+                  <input type="text" placeholder="Team Name" value={state.teamName}
+                    onChange={(e) => dispatch({ type: 'SET_TEAM_NAME', name: e.target.value })}
+                    onKeyDown={(e) => e.key === 'Enter' && handleCreateTeam()} autoFocus />
+                  <div className="lobby-create-actions">
+                    <button className="create-submit" onClick={handleCreateTeam}>CREATE</button>
+                    <button className="create-cancel" onClick={() => { setCreatingTeam(false); dispatch({ type: 'SET_TEAM_NAME', name: '' }); setJoinError('') }}>BACK</button>
+                  </div>
+                  {joinError && <p style={{ color: '#f87171', fontSize: '0.8rem', margin: '0.5rem 0 0 0' }}>{joinError}</p>}
+                </div>
+              ) : (
+                <button className="lobby-create-btn" onClick={() => { setCreatingTeam(true); setJoinError('') }}>
+                  <span style={{ fontSize: '1.2rem' }}>+</span> CREATE TEAM
+                </button>
+              ))}
+
+              {joinError && !state.teamsLocked && <p style={{ color: '#f87171', fontSize: '0.8rem', margin: '0 0 0.5rem 0' }}>{joinError}</p>}
+
+              <div className="lobby-section-title">TEAMS ({state.teamList.length})</div>
+              <div className="lobby-team-list">
+                {state.teamList.length === 0 ? (
+                  <div className="lobby-empty">No teams yet</div>
+                ) : (
+                  state.teamList.map((t) => (
+                    <div key={t.name}
+                      className={`lobby-team-item${state.teamsLocked ? ' locked' : ''}`}
+                      onClick={() => !state.teamsLocked && handleJoinTeam(t.name)}>
+                      <span className="lobby-team-name">{t.name}</span>
+                      <span className={t.size >= t.limit ? 'lobby-team-full' : 'lobby-team-size'}>
+                        {t.size}/{t.limit}{t.size >= t.limit ? ' (full)' : ''}
+                      </span>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              <div className="lobby-rules">
+                <div className="lobby-rules-header">Competition Rules</div>
+                <ol className="lobby-rules-list">
+                  <li>No Shazam, SoundHound, or music identification apps.</li>
+                  <li>Phones must be placed face down on the table during all rounds.</li>
+                  <li>Answers must be submitted within the allotted countdown.</li>
+                  <li>Shouting answers out of turn results in immediate point deduction.</li>
+                  <li>Cheating will lead to disqualification.</li>
+                  <li>Judges' and organizers' decision is final and binding.</li>
+                </ol>
+              </div>
             </div>
           </div>
         )}
@@ -586,8 +657,6 @@ export default function Team() {
               onKeyDown={(e) => e.key === 'Enter' && handleSubmitUsername()} style={inputStyle} />
             <br />
             <button onClick={handleSubmitUsername} style={btnStyle}>SUBMIT</button>
-            <br />
-            <button onClick={handleBack} style={{ ...btnStyle, marginTop: '0.5rem' }}>BACK</button>
             {joinError && <p className="team-error">{joinError}</p>}
           </>
         )}

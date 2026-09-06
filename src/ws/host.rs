@@ -42,6 +42,9 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
             };
             let _ = sender.send(Message::Text(serde_json::to_string(&joined).unwrap().into())).await;
         }
+
+        let locked = *state.teams_locked.read().await;
+        let _ = sender.send(Message::Text(serde_json::to_string(&crate::state::ServerMessage::TeamLock { locked }).unwrap().into())).await;
     }
 
     let mut send_task = tokio::spawn(async move {
@@ -82,6 +85,15 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
                 }
                 ClientMessage::ResetViolations => {
                     state2.reset_violations().await;
+                }
+                ClientMessage::KickUser { team_name, username } => {
+                    state2.kick_user(team_name, username).await;
+                }
+                ClientMessage::LockTeams => {
+                    state2.lock_teams().await;
+                }
+                ClientMessage::UnlockTeams => {
+                    state2.unlock_teams().await;
                 }
                 _ => {}
             }
