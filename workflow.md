@@ -5,49 +5,50 @@ testable before moving to the next — don't build the dashboard UI before the
 ordering logic underneath it is solid.
 
 ## Phase 1 — Server skeleton
-- [ ] `cargo new` project, add `axum`, `tokio`, `serde`, `serde_json`
-- [ ] Single `/ws/echo` WebSocket route that echoes messages back
-- [ ] Confirm connect/disconnect lifecycle works with two simultaneous
+- [x] `cargo new` project, add `axum`, `tokio`, `serde`, `serde_json`
+- [x] Single `/ws/echo` WebSocket route that echoes messages back
+- [x] Confirm connect/disconnect lifecycle works with two simultaneous
       connections (open two browser tabs or use a WS test client)
 
 ## Phase 2 — Team join
-- [ ] `AppState` holding `HashMap<TeamId, Team>` behind `RwLock`
-- [ ] Join flow: team submits a name → check uniqueness → issue a session
+- [x] `AppState` holding `HashMap<TeamId, Team>` behind `RwLock`
+- [x] Join flow: team submits a name → check uniqueness → issue a session
       token → team enters buzzer screen
-- [ ] Reject duplicate team names with a clear error, not a silent overwrite
+- [x] Reject duplicate team names with a clear error, not a silent overwrite
 
 ## Phase 3 — Buzzer press + ordering (the core problem)
-- [ ] WS message `{"type": "buzz"}` from a team
-- [ ] Server timestamps on receipt (`chrono::Utc::now()`), never trusts a
+- [x] WS message `{"type": "buzz"}` from a team
+- [x] Server timestamps on receipt (`chrono::Utc::now()`), never trusts a
       client-sent time
-- [ ] Append to the round's `buzzer_order: Vec<BuzzerEvent>` — no early
+- [x] Append to the round's `buzzer_order: Vec<BuzzerEvent>` — no early
       cutoff at 3, or any fixed number
-- [ ] Broadcast the updated order to all host connections
-- [ ] Test with several fake clients pressing in quick succession before
+- [x] Broadcast the updated order to all host connections
+- [x] Test with several fake clients pressing in quick succession before
       touching any UI — this is where race conditions would show up
 
 ## Phase 4 — Host controls
-- [ ] Round state machine: `Idle → Active → Locked`
-- [ ] Host actions: START (Idle/Locked → Active), LOCK (Active → Locked),
+- [x] Round state machine: `Idle → Active → Locked`
+- [x] Host actions: START (Idle/Locked → Active), LOCK (Active → Locked),
       RESET (clears current buzzer_order), NEXT QUESTION (fresh round)
-- [ ] Only `Locked` stops accepting new buzzer presses — never a count-based
+- [x] Only `Locked` stops accepting new buzzer presses — never a count-based
       cutoff
-- [ ] Host dashboard renders the live order as it streams in, no page
+- [x] Host dashboard renders the live order as it streams in, no page
       refresh
 
 ## Phase 5 — Anti-cheat
-- [ ] Frontend: Page Visibility API, `blur`/`focus`, `fullscreenchange`
+- [x] Frontend: Page Visibility API, `blur`/`focus`, `fullscreenchange`
       listeners on the team page
-- [ ] On violation, send `{"type": "violation", "kind": "..."}` over the
+- [x] On violation, send `{"type": "violation", "kind": "..."}` over the
       existing WS connection
-- [ ] Backend increments `warning_count`, applies disqualification
-      threshold, broadcasts status change to host
-- [ ] Host dashboard shows warning counts and disqualified teams
+- [x] Backend increments `warning_count`, broadcasts violation report to host
+- [x] Host dashboard shows warning counts and can manually disqualify teams
 
 ## Phase 6 — Polish
-- [ ] Reconnect handling (team refreshes page mid-round)
+- [x] Reconnect handling (team refreshes page mid-round)
+- [x] Leaderboard + side menu on team buzzer screen
+- [x] Session persistence across reloads
+- [x] Static file serving via tower-http (production deployment)
 - [ ] Optional: SQLite persistence for teams/history across restarts
-- [ ] Basic styling pass on both team and host pages
 
 ## Testing notes
 - Write ordering logic with a couple of unit tests around concurrent

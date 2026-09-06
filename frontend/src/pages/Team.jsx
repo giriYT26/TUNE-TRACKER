@@ -55,6 +55,10 @@ function teamReducer(state, action) {
       return { ...state, teamMembers: action.members }
     case 'SET_REACTION_TIME':
       return { ...state, reactionTime: action.time }
+    case 'TOGGLE_MENU':
+      return { ...state, menuOpen: !state.menuOpen }
+    case 'CLOSE_MENU':
+      return { ...state, menuOpen: false }
     case 'BUZZER_UPDATE': {
       const myEvent = action.buzzerOrder.find(
         (e) => e.team_name === state.teamName
@@ -65,6 +69,7 @@ function teamReducer(state, action) {
         : state.teamBuzzTime
       return {
         ...state,
+        buzzerOrder: action.buzzerOrder,
         buzzerPosition: myEvent?.position ?? state.buzzerPosition,
         myStatus: myEvent ? 'Answering' : state.myStatus,
         buzzerDisabled: nowBuzzed,
@@ -83,6 +88,7 @@ function teamReducer(state, action) {
         roundStartTime: action.state === 'Active' ? action.startedAtMs : null,
         reactionTime: isNewRound ? null : state.reactionTime,
         teamBuzzed: isNewRound ? false : state.teamBuzzed,
+        buzzerOrder: isNewRound ? [] : state.buzzerOrder,
       }
     }
     case 'RESET_SESSION':
@@ -102,6 +108,8 @@ function teamReducer(state, action) {
         reactionTime: null,
         teamBuzzed: false,
         teamBuzzTime: null,
+        buzzerOrder: [],
+        menuOpen: false,
       }
     default:
       return state
@@ -127,6 +135,8 @@ function getInitialState() {
       reactionTime: null,
       teamBuzzed: saved.teamBuzzed || false,
       teamBuzzTime: saved.teamBuzzTime ?? null,
+      buzzerOrder: [],
+      menuOpen: false,
     }
   }
   return {
@@ -145,6 +155,8 @@ function getInitialState() {
     reactionTime: null,
     teamBuzzed: false,
     teamBuzzTime: null,
+    buzzerOrder: [],
+    menuOpen: false,
   }
 }
 
@@ -391,25 +403,74 @@ export default function Team() {
         .buzz-btn:disabled { cursor: not-allowed; opacity: 0.4; background-color: rgba(100,116,139,0.6) !important; }
         .buzz-btn:not(:disabled) { cursor: pointer; background: linear-gradient(135deg, #ef4444, #dc2626); box-shadow: 0 4px 20px rgba(239,68,68,0.4); }
         .buzz-btn:not(:disabled):active { transform: scale(0.95); }
-        .buzzer-glass .member-list {
-          display: inline-block; text-align: left;
-          background: rgba(15, 23, 42, 0.5);
-          backdrop-filter: blur(8px);
-          -webkit-backdrop-filter: blur(8px);
-          border: 1px solid rgba(148, 163, 184, 0.12);
-          border-radius: 10px; padding: 0.5rem 1rem; margin: 0.75rem auto; min-width: 160px;
-        }
-        .member-list-title { font-size: 0.7rem; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.35rem; text-align: center; }
-        .member-item { padding: 0.2rem 0; color: rgba(255,255,255,0.7); font-size: 0.85rem; }
-        .member-item-you { color: #a78bfa; font-weight: 600; }
-        .buzzer-glass .leave-btn {
-          padding: 0.4rem 1rem; font-size: 0.8rem;
-          background: transparent; color: rgba(255,255,255,0.4);
-          border: 1px solid rgba(255,255,255,0.15); border-radius: 6px;
-          cursor: pointer; margin-top: 0.75rem;
-        }
-        .buzzer-glass .leave-btn:hover { color: #ef4444; border-color: #ef4444; }
         .buzzer-glass .buzzer-msg { color: #22c55e; font-weight: bold; margin: 0.5rem 0; font-size: 0.9rem; }
+        .menu-toggle {
+          position: absolute; top: 0.75rem; right: 0.75rem; z-index: 2;
+          background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.15);
+          border-radius: 8px; padding: 0.4rem 0.6rem; cursor: pointer;
+          color: rgba(255,255,255,0.6); font-size: 1.1rem; line-height: 1;
+          transition: background 0.2s;
+        }
+        .menu-toggle:hover { background: rgba(255,255,255,0.2); color: #fff; }
+        .side-menu-overlay {
+          position: fixed; inset: 0; z-index: 10;
+          background: rgba(0,0,0,0.6); backdrop-filter: blur(4px);
+          display: flex; justify-content: flex-end;
+          animation: fadeIn 0.2s ease;
+        }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes slideIn { from { transform: translateX(100%); } to { transform: translateX(0); } }
+        .side-menu {
+          width: 300px; max-width: 85vw; height: 100vh; height: 100dvh;
+          background: rgba(15, 23, 42, 0.95);
+          backdrop-filter: blur(20px);
+          -webkit-backdrop-filter: blur(20px);
+          border-left: 1px solid rgba(148, 163, 184, 0.15);
+          display: flex; flex-direction: column;
+          animation: slideIn 0.25s ease;
+          overflow-y: auto;
+        }
+        .side-menu-header {
+          display: flex; justify-content: space-between; align-items: center;
+          padding: 1rem 1.25rem; border-bottom: 1px solid rgba(148, 163, 184, 0.1);
+        }
+        .side-menu-header h3 { margin: 0; color: #f1f5f9; font-size: 1rem; }
+        .side-menu-close {
+          background: none; border: none; color: rgba(255,255,255,0.5);
+          font-size: 1.4rem; cursor: pointer; padding: 0; line-height: 1;
+        }
+        .side-menu-close:hover { color: #fff; }
+        .side-menu-section { padding: 0.75rem 1.25rem; }
+        .side-menu-section-title {
+          font-size: 0.65rem; color: #64748b; text-transform: uppercase;
+          letter-spacing: 1px; margin-bottom: 0.5rem; font-weight: 700;
+        }
+        .leaderboard-item {
+          display: flex; align-items: center; gap: 0.6rem;
+          padding: 0.5rem 0.75rem; border-radius: 8px; margin-bottom: 0.25rem;
+          transition: background 0.15s;
+        }
+        .leaderboard-item.is-me { background: rgba(168, 139, 250, 0.15); border: 1px solid rgba(168, 139, 250, 0.25); }
+        .leaderboard-item:not(.is-me) { background: rgba(255,255,255,0.03); }
+        .lb-pos { font-size: 0.85rem; min-width: 2rem; text-align: center; color: #94a3b8; font-weight: 600; }
+        .lb-pos.top3 { font-size: 1.1rem; }
+        .lb-team { flex: 1; color: #e2e8f0; font-weight: 600; font-size: 0.85rem; }
+        .lb-team.is-me { color: #a78bfa; }
+        .lb-time { color: #94a3b8; font-family: monospace; font-size: 0.8rem; font-variant-numeric: tabular-nums; }
+        .lb-user { color: #64748b; font-size: 0.7rem; }
+        .lb-empty { color: #475569; font-size: 0.85rem; text-align: center; padding: 1.5rem 0; }
+        .menu-member-item {
+          padding: 0.35rem 0.75rem; color: rgba(255,255,255,0.7); font-size: 0.85rem;
+          border-radius: 6px; margin-bottom: 0.15rem;
+        }
+        .menu-member-item.is-me { color: #a78bfa; font-weight: 600; background: rgba(168, 139, 250, 0.1); }
+        .menu-leave-btn {
+          display: block; width: 100%; padding: 0.6rem; margin-top: 0.5rem;
+          background: transparent; color: rgba(255,255,255,0.4);
+          border: 1px solid rgba(255,255,255,0.12); border-radius: 8px;
+          cursor: pointer; font-size: 0.85rem; transition: all 0.2s;
+        }
+        .menu-leave-btn:hover { color: #ef4444; border-color: #ef4444; background: rgba(239,68,68,0.08); }
         @media (max-width: 480px) {
           .team-root { padding: 1rem; }
           .team-title { font-size: 1.5rem; }
@@ -419,7 +480,7 @@ export default function Team() {
           .buzz-btn { font-size: 1.5rem; padding: 0.8rem 2rem; }
           .team-btn-big { padding: 0.8rem 1.5rem; font-size: 1rem; width: 200px; }
           .reaction-timer { font-size: 1.5rem; }
-          .member-list { min-width: 140px; padding: 0.4rem 0.75rem; }
+          .side-menu { width: 260px; }
         }
       `}</style>
 
@@ -510,6 +571,7 @@ export default function Team() {
         {state.screen === 'buzzer' && (
           <div className="buzzer-bg">
             <div className="buzzer-glass">
+              <button className="menu-toggle" onClick={() => dispatch({ type: 'TOGGLE_MENU' })}>☰</button>
               <h2 className="team-title">{state.teamName}</h2>
 
               <div className="info-row">
@@ -548,21 +610,36 @@ export default function Team() {
               </div>
 
               {state.buzzerDisabled && state.roundState === 'Active' && <p className="buzzer-msg">✓ BUZZER REGISTERED</p>}
-
-              {state.teamMembers.length > 0 && (
-                <div className="member-list">
-                  <div className="member-list-title">Team ({state.teamMembers.length}/4)</div>
-                  {state.teamMembers.map((m) => (
-                    <div key={m} className={`member-item${m === state.username ? ' member-item-you' : ''}`}>
-                      {m === state.username ? `${m} (you)` : m}
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              <br />
-              <button className="leave-btn" onClick={handleLeave}>LEAVE TEAM</button>
             </div>
+
+            {/* Side Menu Overlay */}
+            {state.menuOpen && (
+              <div className="side-menu-overlay" onClick={() => dispatch({ type: 'CLOSE_MENU' })}>
+                <div className="side-menu" onClick={(e) => e.stopPropagation()}>
+                  <div className="side-menu-header">
+                    <h3>{state.teamName}</h3>
+                    <button className="side-menu-close" onClick={() => dispatch({ type: 'CLOSE_MENU' })}>×</button>
+                  </div>
+
+                  {/* Team Members */}
+                  {state.teamMembers.length > 0 && (
+                    <div className="side-menu-section">
+                      <div className="side-menu-section-title">Team ({state.teamMembers.length}/4)</div>
+                      {state.teamMembers.map((m) => (
+                        <div key={m} className={`menu-member-item${m === state.username ? ' is-me' : ''}`}>
+                          {m === state.username ? `${m} (you)` : m}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Leave Team */}
+                  <div className="side-menu-section">
+                    <button className="menu-leave-btn" onClick={() => { dispatch({ type: 'CLOSE_MENU' }); handleLeave() }}>Leave Team</button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>

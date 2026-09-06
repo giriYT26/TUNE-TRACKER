@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use tokio::sync::{broadcast, RwLock};
 use uuid::Uuid;
 
@@ -44,7 +44,6 @@ pub enum ServerMessage {
     RoundName { name: String },
     TeamStatus { team_name: String, username: String, status: TeamStatus, warning_count: u8 },
     TeamJoined { team_name: String, usernames: Vec<String> },
-    TeamList { teams: Vec<String> },
     ViolationReport { team_name: String, username: String, kind: String, warning_count: u8 },
 }
 
@@ -59,6 +58,7 @@ pub enum ClientMessage {
     Start,
     Lock,
     Reset,
+    NextQuestion,
     SetRoundName { name: String },
     Disqualify { team_name: String, username: Option<String> },
     Leave,
@@ -69,6 +69,8 @@ pub struct AppState {
     pub tx: broadcast::Sender<ServerMessage>,
     pub connected_teams: RwLock<HashMap<String, Vec<String>>>,
     pub connected_users: RwLock<HashMap<String, String>>,
+    pub warning_counts: RwLock<HashMap<String, u8>>,
+    pub disqualified_users: RwLock<HashSet<String>>,
 }
 
 impl AppState {
@@ -85,6 +87,8 @@ impl AppState {
             tx,
             connected_teams: RwLock::new(HashMap::new()),
             connected_users: RwLock::new(HashMap::new()),
+            warning_counts: RwLock::new(HashMap::new()),
+            disqualified_users: RwLock::new(HashSet::new()),
         }
     }
 
@@ -140,6 +144,12 @@ impl AppState {
     }
 
     pub async fn add_buzzer_event(&self, username: String, reaction_time_ms: Option<u64>) -> Option<BuzzerEvent> {
+        let disqualified = self.disqualified_users.read().await;
+        if disqualified.contains(&username) {
+            return None;
+        }
+        drop(disqualified);
+
         let mut round = self.current_round.write().await;
         if round.state != RoundState::Active {
             return None;
@@ -199,6 +209,22 @@ impl AppState {
         });
     }
 
+    pub async fn next_question(&self) {
+        let mut round = self.current_round.write().await;
+        round.id = Uuid::new_v4();
+        round.buzzer_order.clear();
+        round.started_at_ms = Some(chrono::Utc::now().timestamp_millis() as u64);
+        round.state = RoundState::Active;
+        let started_at_ms = round.started_at_ms;
+        let _ = self.tx.send(ServerMessage::BuzzerUpdate {
+            buzzer_order: Vec::new(),
+        });
+        let _ = self.tx.send(ServerMessage::RoundState {
+            state: RoundState::Active,
+            started_at_ms,
+        });
+    }
+
     pub async fn handle_violation(&self, username: String, kind: String) {
         let users = self.connected_users.read().await;
         let team_name = match users.get(&username) {
@@ -207,18 +233,41 @@ impl AppState {
         };
         drop(users);
 
+        let mut counts = self.warning_counts.write().await;
+        let count = counts.entry(username.clone()).or_insert(0);
+        *count += 1;
+        let warning_count = *count;
+        drop(counts);
+
         let _ = self.tx.send(ServerMessage::ViolationReport {
             team_name,
             username,
             kind,
-            warning_count: 0,
+            warning_count,
         });
     }
 
     pub async fn disqualify_user(&self, team_name: String, username: Option<String>) {
+        let users_to_dq: Vec<String> = {
+            if let Some(ref uname) = username {
+                vec![uname.clone()]
+            } else {
+                let teams = self.connected_teams.read().await;
+                teams.get(&team_name).cloned().unwrap_or_default()
+            }
+        };
+
+        {
+            let mut dq = self.disqualified_users.write().await;
+            for u in &users_to_dq {
+                dq.insert(u.clone());
+            }
+        }
+
+        let display_name = username.clone().unwrap_or_default();
         let _ = self.tx.send(ServerMessage::TeamStatus {
-            team_name: team_name.clone(),
-            username: username.clone().unwrap_or_default(),
+            team_name,
+            username: display_name,
             status: TeamStatus::Disqualified,
             warning_count: 3,
         });

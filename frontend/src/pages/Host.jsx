@@ -352,6 +352,7 @@ export default function Host() {
       <div style={styles.header}>
         <h1 style={styles.headerTitle}>Host Dashboard</h1>
         <div style={styles.headerRight}>
+          <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', backgroundColor: connected ? '#22c55e' : '#ef4444', marginRight: '0.25rem' }} />
           <span style={{ ...styles.stateBadge, backgroundColor: roundColor[state.roundState] || '#6b7280' }}>
             {state.roundState}
           </span>
@@ -380,7 +381,7 @@ export default function Host() {
           ↺ RESET
         </button>
         <button
-          onClick={() => sendControl('reset')}
+          onClick={() => send({ type: 'next_question' })}
           style={{ ...styles.ctrlBtn, backgroundColor: '#2563eb' }}
         >
           ⏭ NEXT
@@ -500,7 +501,7 @@ export default function Host() {
                 ...styles.violationItem,
                 backgroundColor: i === 0 ? '#7f1d1d' : '#450a0a',
               }}>
-                ⚠️ {v.teamName} — {v.username}: {v.kind} ({v.time})
+                ⚠️ {v.username}: {v.kind} ({v.warningCount})
               </div>
             ))
           )}

@@ -71,6 +71,9 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
                 ClientMessage::Reset => {
                     state2.reset_buzzer().await;
                 }
+                ClientMessage::NextQuestion => {
+                    state2.next_question().await;
+                }
                 ClientMessage::SetRoundName { name } => {
                     state2.set_round_name(name).await;
                 }

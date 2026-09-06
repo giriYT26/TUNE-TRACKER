@@ -3,6 +3,7 @@ mod ws;
 
 use axum::{routing::get, Router};
 use std::sync::Arc;
+use tower_http::services::ServeDir;
 
 use crate::state::AppState;
 
@@ -13,6 +14,7 @@ async fn main() {
     let app = Router::new()
         .route("/ws/team", get(ws::team::handler))
         .route("/ws/host", get(ws::host::handler))
+        .fallback_service(ServeDir::new("frontend/dist"))
         .with_state(shared_state);
 
     let listener = tokio::net::TcpListener::bind("0.0.0.0:3000")

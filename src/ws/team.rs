@@ -105,13 +105,26 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
 
                         match state.add_username(team_name.clone().unwrap(), name.clone()).await {
                             Ok(()) => {
-                                username = Some(name);
+                                username = Some(name.clone());
                                 let round = state.current_round.read().await;
                                 let reply = serde_json::json!({
                                     "type": "username_accepted",
                                     "round_name": round.name
                                 });
                                 let _ = sender.send(Message::Text(reply.to_string().into())).await;
+
+                                let dq = state.disqualified_users.read().await;
+                                if dq.contains(&name) {
+                                    let _ = sender.send(Message::Text(
+                                        serde_json::to_string(&ServerMessage::TeamStatus {
+                                            team_name: team_name.clone().unwrap(),
+                                            username: name,
+                                            status: crate::state::TeamStatus::Disqualified,
+                                            warning_count: 3,
+                                        }).unwrap().into(),
+                                    )).await;
+                                }
+                                drop(dq);
                             }
                             Err(e) => {
                                 let _ = sender.send(Message::Text(
