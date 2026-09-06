@@ -60,8 +60,8 @@ function teamReducer(state, action) {
         (e) => e.team_name === state.teamName
       )
       const nowBuzzed = myEvent ? true : state.teamBuzzed
-      const buzzTime = (nowBuzzed && !state.teamBuzzed && state.roundStartTime)
-        ? Date.now() - state.roundStartTime
+      const buzzTime = (nowBuzzed && !state.teamBuzzed)
+        ? (myEvent?.reaction_time_ms ?? (state.roundStartTime ? Date.now() - state.roundStartTime : 0))
         : state.teamBuzzTime
       return {
         ...state,
@@ -72,7 +72,8 @@ function teamReducer(state, action) {
         teamBuzzTime: buzzTime,
       }
     }
-    case 'ROUND_STATE_CHANGE':
+    case 'ROUND_STATE_CHANGE': {
+      const isNewRound = action.state === 'Active' && action.startedAtMs !== state.roundStartTime
       return {
         ...state,
         roundState: action.state,
@@ -80,9 +81,10 @@ function teamReducer(state, action) {
         buzzerPosition: action.state === 'Active' ? null : state.buzzerPosition,
         myStatus: action.state === 'Active' ? 'Waiting' : state.myStatus,
         roundStartTime: action.state === 'Active' ? action.startedAtMs : null,
-        reactionTime: action.state === 'Active' ? null : state.reactionTime,
-        teamBuzzed: action.state === 'Active' ? false : state.teamBuzzed,
+        reactionTime: isNewRound ? null : state.reactionTime,
+        teamBuzzed: isNewRound ? false : state.teamBuzzed,
       }
+    }
     case 'RESET_SESSION':
       return {
         screen: 'choose',
@@ -115,18 +117,18 @@ function getInitialState() {
       username: saved.username || '',
       action: saved.action || '',
       roundName: 'Round 1',
-      myStatus: 'Waiting',
-      buzzerDisabled: false,
-      buzzerPosition: null,
-      roundState: 'Idle',
+      myStatus: saved.teamBuzzed ? 'Answering' : 'Waiting',
+      buzzerDisabled: saved.teamBuzzed || false,
+      buzzerPosition: saved.buzzerPosition ?? null,
+      roundState: saved.roundStartTime ? 'Active' : 'Idle',
       teamList: [],
       teamMembers: [],
-      roundStartTime: null,
-        reactionTime: null,
-        teamBuzzed: false,
-        teamBuzzTime: null,
-      }
+      roundStartTime: saved.roundStartTime ?? null,
+      reactionTime: null,
+      teamBuzzed: saved.teamBuzzed || false,
+      teamBuzzTime: saved.teamBuzzTime ?? null,
     }
+  }
   return {
     screen: 'choose',
     teamName: '',
@@ -249,9 +251,13 @@ export default function Team() {
         teamName: state.teamName,
         username: state.username,
         action: chosenAction || state.action,
+        teamBuzzed: state.teamBuzzed,
+        teamBuzzTime: state.teamBuzzTime,
+        roundStartTime: state.roundStartTime,
+        buzzerPosition: state.buzzerPosition,
       })
     }
-  }, [state.screen, state.teamName, state.username, chosenAction, state.action])
+  }, [state.screen, state.teamName, state.username, chosenAction, state.action, state.teamBuzzed, state.teamBuzzTime, state.roundStartTime, state.buzzerPosition])
 
   const handleChoose = (action) => {
     dispatch({ type: 'SET_SCREEN', screen: 'teamname' })
