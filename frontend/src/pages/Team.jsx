@@ -160,10 +160,10 @@ export default function Team() {
 
   // Live ticking timer — updates display every 50ms while round is active and team hasn't buzzed
   useEffect(() => {
-    if (state.roundState !== 'Active' || state.reactionTime !== null || state.teamBuzzed) return
+    if (state.roundState !== 'Active' || state.reactionTime !== null || state.teamBuzzed || state.buzzerDisabled) return
     const id = setInterval(() => setTick((t) => t + 1), 50)
     return () => clearInterval(id)
-  }, [state.roundState, state.reactionTime, state.teamBuzzed])
+  }, [state.roundState, state.reactionTime, state.teamBuzzed, state.buzzerDisabled])
 
   // Toggle buzzer-active class on html/body/#root for fullscreen bg
   useEffect(() => {
@@ -279,10 +279,8 @@ export default function Team() {
   }
 
   const handleBuzz = () => {
-    const reactionTime = state.roundStartTime ? Date.now() - state.roundStartTime : null
-    if (reactionTime !== null) {
-      dispatch({ type: 'SET_REACTION_TIME', time: reactionTime })
-    }
+    const reactionTime = state.roundStartTime ? Date.now() - state.roundStartTime : 0
+    dispatch({ type: 'SET_REACTION_TIME', time: reactionTime })
     send({ type: 'buzz', reaction_time_ms: reactionTime })
     dispatch({ type: 'SET_BUZZER_DISABLED', disabled: true })
   }
