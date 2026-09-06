@@ -122,7 +122,7 @@ function teamReducer(state, action) {
 
 function getInitialState() {
   const saved = loadSession()
-  if (saved && (saved.screen === 'username' || saved.screen === 'buzzer')) {
+  if (saved && saved.screen === 'buzzer') {
     return {
       screen: saved.screen,
       teamName: saved.teamName || '',
@@ -174,6 +174,11 @@ export default function Team() {
   })
   const [creatingTeam, setCreatingTeam] = useState(false)
   const [confirmLeave, setConfirmLeave] = useState(false)
+  const [showUsernameModal, setShowUsernameModal] = useState(() => {
+    const saved = loadSession()
+    return saved?.screen === 'username' || false
+  })
+  const [teamSearch, setTeamSearch] = useState('')
   const reregisteredRef = useRef(false)
 
   const [state, dispatch] = useReducer(teamReducer, null, getInitialState)
@@ -200,12 +205,13 @@ export default function Team() {
     (msg) => {
       switch (msg.type) {
         case 'joined':
-          dispatch({ type: 'SET_SCREEN', screen: 'username' })
+          setShowUsernameModal(true)
           setJoinError('')
           break
         case 'username_accepted':
           dispatch({ type: 'SET_ROUND_NAME', name: msg.round_name || 'Round 1' })
           dispatch({ type: 'SET_SCREEN', screen: 'buzzer' })
+          setShowUsernameModal(false)
           setJoinError('')
           break
         case 'error':
@@ -243,6 +249,7 @@ export default function Team() {
         case 'kicked':
           if (msg.username === state.username) {
             dispatch({ type: 'RESET_SESSION' })
+            setShowUsernameModal(false)
             clearSession()
             setJoinError('You have been kicked from the team.')
           }
@@ -270,14 +277,15 @@ export default function Team() {
     } else if (saved && saved.teamName && saved.screen === 'username') {
       reregisteredRef.current = true
       send({ type: 'join', team_name: saved.teamName, action: saved.action || 'join' })
+      setShowUsernameModal(true)
     }
   }, [connected, send])
 
   // Save session on screen changes
   useEffect(() => {
-    if (state.screen === 'username' || state.screen === 'buzzer') {
+    if (showUsernameModal || state.screen === 'buzzer') {
       saveSession({
-        screen: state.screen,
+        screen: showUsernameModal ? 'username' : state.screen,
         teamName: state.teamName,
         username: state.username,
         action: chosenAction || state.action,
@@ -287,7 +295,7 @@ export default function Team() {
         buzzerPosition: state.buzzerPosition,
       })
     }
-  }, [state.screen, state.teamName, state.username, chosenAction, state.action, state.teamBuzzed, state.teamBuzzTime, state.roundStartTime, state.buzzerPosition])
+  }, [showUsernameModal, state.screen, state.teamName, state.username, chosenAction, state.action, state.teamBuzzed, state.teamBuzzTime, state.roundStartTime, state.buzzerPosition])
 
   const handleJoinTeam = (teamName) => {
     dispatch({ type: 'SET_TEAM_NAME', name: teamName })
@@ -304,16 +312,12 @@ export default function Team() {
     send({ type: 'join', team_name: name, action: 'create' })
   }
 
-  const handleJoin = () => {
-    const name = state.teamName.trim()
-    if (!name) return
-    setJoinError('')
-    send({ type: 'join', team_name: name, action: chosenAction })
-  }
-
   const handleSubmitUsername = () => {
     const name = state.username.trim()
-    if (!name) return
+    if (!name) {
+      setJoinError('Please enter a username')
+      return
+    }
     setJoinError('')
     send({ type: 'username', username: name })
   }
@@ -330,6 +334,15 @@ export default function Team() {
     dispatch({ type: 'CLOSE_MENU' })
     send({ type: 'leave' })
     dispatch({ type: 'RESET_SESSION' })
+    setShowUsernameModal(false)
+    clearSession()
+  }
+
+  const handleCancelUsername = () => {
+    send({ type: 'leave' })
+    dispatch({ type: 'RESET_SESSION' })
+    setShowUsernameModal(false)
+    setJoinError('')
     clearSession()
   }
 
@@ -375,9 +388,6 @@ export default function Team() {
     }
   }, [connected, send])
 
-  const inputStyle = { padding: '0.5rem', width: '250px', maxWidth: '80vw', marginBottom: '0.75rem', boxSizing: 'border-box' }
-  const btnStyle = { padding: '0.5rem 1.5rem' }
-
   return (
     <>
       <style>{`
@@ -420,7 +430,14 @@ export default function Team() {
           font-size: 0.7rem; color: #64748b; text-transform: uppercase;
           letter-spacing: 1px; margin-bottom: 0.5rem; font-weight: 700; text-align: left;
         }
-        .lobby-team-list { text-align: left; }
+        .lobby-team-list { text-align: left; max-height: 300px; overflow-y: auto; }
+        .lobby-search {
+          width: 100%; padding: 0.6rem 0.75rem; background: rgba(0,0,0,0.3);
+          border: 1px solid rgba(148, 163, 184, 0.2); border-radius: 6px;
+          color: #e2e8f0; font-size: 0.85rem; margin-bottom: 0.5rem; box-sizing: border-box;
+        }
+        .lobby-search::placeholder { color: #64748b; }
+        .lobby-search:focus { outline: none; border-color: rgba(168, 139, 250, 0.5); }
         .lobby-team-item {
           display: flex; align-items: center; justify-content: space-between;
           padding: 0.7rem 1rem; background: rgba(255,255,255,0.04);
@@ -455,7 +472,6 @@ export default function Team() {
         .lobby-rules-list {
           padding: 0.75rem 1rem 0.75rem 1.5rem;
           margin: 0; text-align: left;
-          max-height: 200px; overflow-y: auto;
         }
         .lobby-rules-list li {
           color: #94a3b8; font-size: 0.8rem; line-height: 1.6;
@@ -467,10 +483,24 @@ export default function Team() {
           background: rgba(0,0,0,0.7); backdrop-filter: blur(4px);
           display: flex; align-items: center; justify-content: center;
         }
-        .confirm-dialog {
+        .confirm-dialog, .username-modal {
           background: rgba(15, 23, 42, 0.95); border: 1px solid rgba(148, 163, 184, 0.15);
           border-radius: 12px; padding: 1.5rem; width: 300px; max-width: 85vw; text-align: center;
         }
+        .username-modal input {
+          width: 100%; padding: 0.6rem 0.75rem; background: rgba(0,0,0,0.3);
+          border: 1px solid rgba(148, 163, 184, 0.2); border-radius: 6px;
+          color: #e2e8f0; font-size: 0.9rem; margin-bottom: 0.75rem; box-sizing: border-box;
+        }
+        .username-modal input::placeholder { color: #64748b; }
+        .username-modal input:focus { outline: none; border-color: rgba(168, 139, 250, 0.5); }
+        .username-modal h3 { color: #f1f5f9; margin: 0 0 0.25rem 0; font-size: 1.1rem; }
+        .username-modal .sub-label { color: #94a3b8; font-size: 0.85rem; margin: 0 0 1rem 0; }
+        .username-modal .modal-error { color: #f87171; font-size: 0.8rem; margin: 0 0 0.75rem 0; }
+        .username-modal-actions { display: flex; gap: 0.5rem; }
+        .username-modal-actions button { flex: 1; padding: 0.6rem; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 0.85rem; }
+        .username-modal-actions .modal-submit { background: #7c3aed; color: #fff; }
+        .username-modal-actions .modal-cancel { background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.5); }
         .confirm-dialog p { color: #e2e8f0; margin: 0 0 1.25rem 0; font-size: 0.95rem; }
         .confirm-actions { display: flex; gap: 0.5rem; }
         .confirm-actions button { flex: 1; padding: 0.6rem; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 0.85rem; }
@@ -612,14 +642,26 @@ export default function Team() {
                 </button>
               ))}
 
-              {joinError && !state.teamsLocked && <p style={{ color: '#f87171', fontSize: '0.8rem', margin: '0 0 0.5rem 0' }}>{joinError}</p>}
+              {joinError && !state.teamsLocked && !creatingTeam && !showUsernameModal && (
+                <p style={{ color: '#f87171', fontSize: '0.8rem', margin: '0 0 0.5rem 0' }}>{joinError}</p>
+              )}
 
               <div className="lobby-section-title">TEAMS ({state.teamList.length})</div>
+              {state.teamList.length > 3 && (
+                <input type="text" className="lobby-search" placeholder="Search teams..."
+                  value={teamSearch} onChange={(e) => setTeamSearch(e.target.value)} />
+              )}
               <div className="lobby-team-list">
                 {state.teamList.length === 0 ? (
                   <div className="lobby-empty">No teams yet</div>
-                ) : (
-                  state.teamList.map((t) => (
+                ) : (() => {
+                  const filtered = state.teamList.filter((t) =>
+                    t.name.toLowerCase().includes(teamSearch.toLowerCase())
+                  )
+                  if (filtered.length === 0) {
+                    return <div className="lobby-empty">No matching teams</div>
+                  }
+                  return filtered.map((t) => (
                     <div key={t.name}
                       className={`lobby-team-item${state.teamsLocked ? ' locked' : ''}`}
                       onClick={() => !state.teamsLocked && handleJoinTeam(t.name)}>
@@ -629,7 +671,7 @@ export default function Team() {
                       </span>
                     </div>
                   ))
-                )}
+                })()}
               </div>
 
               <div className="lobby-rules">
@@ -647,21 +689,7 @@ export default function Team() {
           </div>
         )}
 
-        {/* Screen 2: Username */}
-        {state.screen === 'username' && (
-          <>
-            <h2 className="team-subtitle">{state.teamName}</h2>
-            <p>Enter Username</p>
-            <input type="text" placeholder="Username" value={state.username}
-              onChange={(e) => dispatch({ type: 'SET_USERNAME', name: e.target.value })}
-              onKeyDown={(e) => e.key === 'Enter' && handleSubmitUsername()} style={inputStyle} />
-            <br />
-            <button onClick={handleSubmitUsername} style={btnStyle}>SUBMIT</button>
-            {joinError && <p className="team-error">{joinError}</p>}
-          </>
-        )}
-
-        {/* Screen 4: Buzzer */}
+        {/* Screen 2: Buzzer */}
         {state.screen === 'buzzer' && (
           <div className="buzzer-bg">
             <div className="buzzer-glass">
@@ -748,6 +776,22 @@ export default function Team() {
             <div className="confirm-actions">
               <button className="confirm-yes" onClick={handleLeave}>Leave</button>
               <button className="confirm-no" onClick={() => setConfirmLeave(false)}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+      {showUsernameModal && (
+        <div className="confirm-overlay" onClick={handleCancelUsername}>
+          <div className="username-modal" onClick={(e) => e.stopPropagation()}>
+            <h3>{state.teamName}</h3>
+            <p className="sub-label">Enter Username</p>
+            <input type="text" placeholder="Username" value={state.username}
+              onChange={(e) => { dispatch({ type: 'SET_USERNAME', name: e.target.value }); setJoinError('') }}
+              onKeyDown={(e) => e.key === 'Enter' && handleSubmitUsername()} autoFocus />
+            {joinError && <p className="modal-error">{joinError}</p>}
+            <div className="username-modal-actions">
+              <button className="modal-submit" onClick={handleSubmitUsername}>SUBMIT</button>
+              <button className="modal-cancel" onClick={handleCancelUsername}>CANCEL</button>
             </div>
           </div>
         </div>
