@@ -1,5 +1,28 @@
-import { useState, useEffect, useReducer, useCallback } from 'react'
+import { useState, useEffect, useReducer, useCallback, useRef } from 'react'
 import { useWebSocket } from '../hooks/useWebSocket'
+
+const SESSION_KEY = 'teamSession'
+
+function loadSession() {
+  try {
+    const raw = sessionStorage.getItem(SESSION_KEY)
+    return raw ? JSON.parse(raw) : null
+  } catch {
+    return null
+  }
+}
+
+function saveSession(data) {
+  try {
+    sessionStorage.setItem(SESSION_KEY, JSON.stringify(data))
+  } catch {}
+}
+
+function clearSession() {
+  try {
+    sessionStorage.removeItem(SESSION_KEY)
+  } catch {}
+}
 
 function teamReducer(state, action) {
   switch (action.type) {
@@ -39,17 +62,41 @@ function teamReducer(state, action) {
         buzzerPosition: action.state === 'Active' ? null : state.buzzerPosition,
         myStatus: action.state === 'Active' ? 'Waiting' : state.myStatus,
       }
+    case 'RESET_SESSION':
+      return {
+        screen: 'choose',
+        teamName: '',
+        username: '',
+        action: '',
+        roundName: 'Round 1',
+        myStatus: 'Waiting',
+        buzzerDisabled: false,
+        buzzerPosition: null,
+        roundState: 'Idle',
+        teamList: state.teamList,
+      }
     default:
       return state
   }
 }
 
-export default function Team() {
-  const [joinError, setJoinError] = useState('')
-  const [chosenAction, setChosenAction] = useState('')
-  const [teamSearch, setTeamSearch] = useState('')
-
-  const [state, dispatch] = useReducer(teamReducer, {
+function getInitialState() {
+  const saved = loadSession()
+  if (saved && (saved.screen === 'username' || saved.screen === 'buzzer')) {
+    return {
+      screen: saved.screen,
+      teamName: saved.teamName || '',
+      username: saved.username || '',
+      action: saved.action || '',
+      roundName: 'Round 1',
+      myStatus: 'Waiting',
+      buzzerDisabled: false,
+      buzzerPosition: null,
+      roundState: 'Idle',
+      teamList: [],
+    }
+  }
+  return {
     screen: 'choose',
     teamName: '',
     username: '',
@@ -60,7 +107,19 @@ export default function Team() {
     buzzerPosition: null,
     roundState: 'Idle',
     teamList: [],
+  }
+}
+
+export default function Team() {
+  const [joinError, setJoinError] = useState('')
+  const [chosenAction, setChosenAction] = useState(() => {
+    const saved = loadSession()
+    return saved?.action || ''
   })
+  const [teamSearch, setTeamSearch] = useState('')
+  const reregisteredRef = useRef(false)
+
+  const [state, dispatch] = useReducer(teamReducer, null, getInitialState)
 
   const handleServerMessage = useCallback(
     (msg) => {
@@ -104,6 +163,37 @@ export default function Team() {
 
   const { connected, send } = useWebSocket('/ws/team', handleServerMessage)
 
+  // Re-register with server on reconnect
+  useEffect(() => {
+    if (!connected) {
+      reregisteredRef.current = false
+      return
+    }
+    if (reregisteredRef.current) return
+
+    const saved = loadSession()
+    if (saved && saved.teamName && saved.username) {
+      reregisteredRef.current = true
+      send({ type: 'join', team_name: saved.teamName, action: saved.action || 'join' })
+      send({ type: 'username', username: saved.username })
+    } else if (saved && saved.teamName && saved.screen === 'username') {
+      reregisteredRef.current = true
+      send({ type: 'join', team_name: saved.teamName, action: saved.action || 'join' })
+    }
+  }, [connected, send])
+
+  // Save session on screen changes
+  useEffect(() => {
+    if (state.screen === 'username' || state.screen === 'buzzer') {
+      saveSession({
+        screen: state.screen,
+        teamName: state.teamName,
+        username: state.username,
+        action: chosenAction || state.action,
+      })
+    }
+  }, [state.screen, state.teamName, state.username, chosenAction, state.action])
+
   const handleChoose = (action) => {
     dispatch({ type: 'SET_SCREEN', screen: 'teamname' })
     dispatch({ type: 'SET_TEAM_NAME', name: '' })
@@ -135,8 +225,9 @@ export default function Team() {
   }
 
   const handleBack = () => {
-    dispatch({ type: 'SET_SCREEN', screen: 'choose' })
+    dispatch({ type: 'RESET_SESSION' })
     setJoinError('')
+    clearSession()
   }
 
   const filteredTeams = state.teamList.filter((t) =>
@@ -301,6 +392,8 @@ export default function Team() {
         />
         <br />
         <button onClick={handleSubmitUsername} style={btnStyle}>SUBMIT</button>
+        <br />
+        <button onClick={handleBack} style={{ ...btnStyle, marginTop: '0.5rem' }}>BACK</button>
         {joinError && <p style={{ color: 'red', marginTop: '0.5rem' }}>{joinError}</p>}
       </div>
     )
