@@ -17,9 +17,9 @@ describe('Team Page', () => {
     expect(screen.getAllByText('JOIN TEAM').length).toBeGreaterThanOrEqual(1)
   })
 
-  it('shows Connected status', () => {
+  it('renders landing page buttons', () => {
     render(<Team />)
-    expect(screen.getAllByText('Connected').length).toBeGreaterThanOrEqual(1)
+    expect(screen.getAllByText('CREATE TEAM').length).toBeGreaterThanOrEqual(1)
   })
 
   it('transitions to teamname screen when CREATE TEAM is clicked', () => {

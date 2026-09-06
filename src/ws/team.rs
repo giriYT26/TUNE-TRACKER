@@ -17,6 +17,15 @@ pub async fn handler(ws: WebSocketUpgrade, State(state): State<Arc<AppState>>) -
 async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
     let (mut sender, mut receiver) = socket.split();
 
+    let teams = state.connected_teams.read().await;
+    let team_names: Vec<String> = teams.keys().cloned().collect();
+    drop(teams);
+    let reply = serde_json::json!({
+        "type": "team_list",
+        "teams": team_names
+    });
+    let _ = sender.send(Message::Text(reply.to_string().into())).await;
+
     let mut team_name: Option<String> = None;
     let mut username: Option<String> = None;
 
@@ -77,9 +86,17 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
                             "message": e
                         });
                         let _ = sender.send(Message::Text(reply.to_string().into())).await;
-                        return;
                     }
                 }
+            }
+            ClientMessage::GetTeams => {
+                let teams = state.connected_teams.read().await;
+                let team_names: Vec<String> = teams.keys().cloned().collect();
+                let reply = serde_json::json!({
+                    "type": "team_list",
+                    "teams": team_names
+                });
+                let _ = sender.send(Message::Text(reply.to_string().into())).await;
             }
             ClientMessage::Buzz => {
                 if let Some(ref uname) = username {

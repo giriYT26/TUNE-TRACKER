@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Link, Navigate } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import Team from './pages/Team'
 import Host from './pages/Host'
 import HostLogin from './pages/HostLogin'
@@ -26,14 +26,7 @@ function App() {
         />
         <Route
           path="/"
-          element={
-            <div style={{ padding: '2rem', textAlign: 'center' }}>
-              <h1>TUNE TRACKER</h1>
-              <nav>
-                <Link to="/team">Team Page</Link>
-              </nav>
-            </div>
-          }
+          element={<Navigate to="/team" replace />}
         />
       </Routes>
     </BrowserRouter>

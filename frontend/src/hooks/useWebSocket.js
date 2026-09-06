@@ -5,27 +5,51 @@ export function useWebSocket(path, onMessage) {
   const [connected, setConnected] = useState(false)
   const onMessageRef = useRef(onMessage)
   onMessageRef.current = onMessage
+  const retryTimeoutRef = useRef(null)
+  const mountedRef = useRef(true)
 
   useEffect(() => {
-    const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const url = `${protocol}//${location.host}${path}`
-    const ws = new WebSocket(url)
-    socketRef.current = ws
+    mountedRef.current = true
 
-    ws.onopen = () => setConnected(true)
-    ws.onclose = () => setConnected(false)
-    ws.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data)
-        onMessageRef.current?.(data)
-      } catch {
-        // ignore malformed messages
+    function connect() {
+      if (!mountedRef.current) return
+
+      const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:'
+      const url = `${protocol}//${location.host}${path}`
+      const ws = new WebSocket(url)
+      socketRef.current = ws
+
+      ws.onopen = () => {
+        if (mountedRef.current) setConnected(true)
+      }
+
+      ws.onclose = () => {
+        if (mountedRef.current) {
+          setConnected(false)
+          retryTimeoutRef.current = setTimeout(connect, 2000)
+        }
+      }
+
+      ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data)
+          onMessageRef.current?.(data)
+        } catch {
+          // ignore malformed messages
+        }
       }
     }
 
+    connect()
+
     return () => {
-      ws.close()
-      socketRef.current = null
+      mountedRef.current = false
+      if (retryTimeoutRef.current) clearTimeout(retryTimeoutRef.current)
+      if (socketRef.current) {
+        socketRef.current.onclose = null
+        socketRef.current.close()
+        socketRef.current = null
+      }
     }
   }, [path])
 

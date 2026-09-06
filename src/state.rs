@@ -41,6 +41,7 @@ pub enum ServerMessage {
     RoundName { name: String },
     TeamStatus { team_name: String, username: String, status: TeamStatus, warning_count: u8 },
     TeamJoined { team_name: String, usernames: Vec<String> },
+    TeamList { teams: Vec<String> },
     ViolationReport { team_name: String, username: String, kind: String, warning_count: u8 },
 }
 
@@ -49,6 +50,7 @@ pub enum ServerMessage {
 pub enum ClientMessage {
     Join { team_name: String, action: String },
     Username { username: String },
+    GetTeams,
     Buzz,
     Violation { kind: String },
     Start,

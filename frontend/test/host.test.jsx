@@ -26,19 +26,10 @@ describe('Host Dashboard', () => {
         <Host />
       </MemoryRouter>
     )
-    expect(screen.getAllByText('START BUZZER').length).toBeGreaterThan(0)
-    expect(screen.getAllByText('LOCK BUZZER').length).toBeGreaterThan(0)
-    expect(screen.getAllByText('RESET BUZZER').length).toBeGreaterThan(0)
-    expect(screen.getAllByText('NEXT').length).toBeGreaterThan(0)
-  })
-
-  it('renders Connected status', () => {
-    render(
-      <MemoryRouter>
-        <Host />
-      </MemoryRouter>
-    )
-    expect(screen.getAllByText('Connected').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('▶ START').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('🔒 LOCK').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('↺ RESET').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('⏭ NEXT').length).toBeGreaterThan(0)
   })
 
   it('renders Logout button', () => {
@@ -50,13 +41,22 @@ describe('Host Dashboard', () => {
     expect(screen.getAllByText('Logout').length).toBeGreaterThan(0)
   })
 
+  it('renders round state badge', () => {
+    render(
+      <MemoryRouter>
+        <Host />
+      </MemoryRouter>
+    )
+    expect(screen.getAllByText('Idle').length).toBeGreaterThan(0)
+  })
+
   it('shows round name input', () => {
     render(
       <MemoryRouter>
         <Host />
       </MemoryRouter>
     )
-    expect(screen.getAllByText('Round Name:').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('Round:').length).toBeGreaterThan(0)
     expect(screen.getAllByText('Set').length).toBeGreaterThan(0)
   })
 
@@ -85,5 +85,16 @@ describe('Host Dashboard', () => {
       </MemoryRouter>
     )
     expect(screen.getAllByText('No violations').length).toBeGreaterThan(0)
+  })
+
+  it('shows section headers', () => {
+    render(
+      <MemoryRouter>
+        <Host />
+      </MemoryRouter>
+    )
+    expect(screen.getAllByText(/Buzzer Order/).length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/Teams/).length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/Violation Alerts/).length).toBeGreaterThan(0)
   })
 })

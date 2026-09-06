@@ -46,6 +46,218 @@ function hostReducer(state, action) {
 
 const medals = ['🥇', '🥈', '🥉']
 
+const styles = {
+  page: {
+    padding: '1.5rem',
+    maxWidth: '1100px',
+    margin: '0 auto',
+    fontFamily: 'system-ui, -apple-system, sans-serif',
+  },
+  header: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: '1rem',
+  },
+  headerTitle: {
+    fontSize: '1.8rem',
+    fontWeight: '700',
+    margin: 0,
+    color: '#f3f4f6',
+  },
+  headerRight: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '0.75rem',
+  },
+  stateBadge: {
+    padding: '0.35rem 1rem',
+    borderRadius: '20px',
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: '0.85rem',
+    letterSpacing: '0.5px',
+  },
+  logoutBtn: {
+    padding: '0.4rem 1rem',
+    backgroundColor: '#374151',
+    color: '#d1d5db',
+    border: '1px solid #4b5563',
+    borderRadius: '6px',
+    cursor: 'pointer',
+    fontSize: '0.85rem',
+  },
+  controlBar: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '0.5rem',
+    flexWrap: 'wrap',
+    padding: '0.75rem 1rem',
+    backgroundColor: '#1e293b',
+    borderRadius: '8px',
+    marginBottom: '1.25rem',
+    border: '1px solid #334155',
+  },
+  ctrlBtn: {
+    padding: '0.4rem 1rem',
+    border: 'none',
+    borderRadius: '6px',
+    cursor: 'pointer',
+    fontWeight: '600',
+    fontSize: '0.8rem',
+    color: '#fff',
+    letterSpacing: '0.3px',
+  },
+  roundInput: {
+    marginLeft: 'auto',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '0.4rem',
+  },
+  input: {
+    padding: '0.35rem 0.6rem',
+    backgroundColor: '#0f172a',
+    color: '#e2e8f0',
+    border: '1px solid #475569',
+    borderRadius: '4px',
+    fontSize: '0.85rem',
+    width: '140px',
+  },
+  setBtn: {
+    padding: '0.35rem 0.7rem',
+    backgroundColor: '#3b82f6',
+    color: '#fff',
+    border: 'none',
+    borderRadius: '4px',
+    cursor: 'pointer',
+    fontSize: '0.8rem',
+    fontWeight: '600',
+  },
+  grid: {
+    display: 'grid',
+    gridTemplateColumns: '1fr 1fr',
+    gap: '1.25rem',
+    marginBottom: '1.25rem',
+  },
+  card: {
+    backgroundColor: '#1e293b',
+    borderRadius: '8px',
+    border: '1px solid #334155',
+    overflow: 'hidden',
+  },
+  cardHeader: {
+    padding: '0.6rem 1rem',
+    borderBottom: '1px solid #334155',
+    fontWeight: '700',
+    fontSize: '0.95rem',
+    color: '#f3f4f6',
+  },
+  cardBody: {
+    padding: '0',
+  },
+  table: {
+    width: '100%',
+    borderCollapse: 'collapse',
+    fontSize: '0.85rem',
+  },
+  th: {
+    textAlign: 'left',
+    padding: '0.5rem 0.75rem',
+    color: '#94a3b8',
+    fontWeight: '600',
+    borderBottom: '1px solid #334155',
+    fontSize: '0.75rem',
+    textTransform: 'uppercase',
+    letterSpacing: '0.5px',
+  },
+  td: {
+    padding: '0.5rem 0.75rem',
+    color: '#e2e8f0',
+    borderBottom: '1px solid #1e293b',
+  },
+  emptyRow: {
+    padding: '1.5rem',
+    textAlign: 'center',
+    color: '#64748b',
+    fontSize: '0.85rem',
+  },
+  teamCard: {
+    padding: '0.75rem 1rem',
+    borderBottom: '1px solid #334155',
+  },
+  teamHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: '0.4rem',
+  },
+  teamName: {
+    fontWeight: '700',
+    color: '#f3f4f6',
+    fontSize: '0.9rem',
+  },
+  dqBtn: {
+    padding: '0.2rem 0.5rem',
+    backgroundColor: '#dc2626',
+    color: '#fff',
+    border: 'none',
+    borderRadius: '4px',
+    cursor: 'pointer',
+    fontSize: '0.7rem',
+    fontWeight: '600',
+  },
+  memberRow: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: '0.25rem 0 0.25rem 0.75rem',
+  },
+  memberName: {
+    color: '#94a3b8',
+    fontSize: '0.85rem',
+  },
+  removeBtn: {
+    padding: '0.15rem 0.4rem',
+    backgroundColor: '#d97706',
+    color: '#fff',
+    border: 'none',
+    borderRadius: '3px',
+    cursor: 'pointer',
+    fontSize: '0.7rem',
+    fontWeight: '600',
+  },
+  violationBar: {
+    backgroundColor: '#1e293b',
+    borderRadius: '8px',
+    border: '1px solid #334155',
+    overflow: 'hidden',
+  },
+  violationHeader: {
+    padding: '0.6rem 1rem',
+    borderBottom: '1px solid #334155',
+    fontWeight: '700',
+    fontSize: '0.95rem',
+    color: '#f3f4f6',
+  },
+  violationList: {
+    maxHeight: '180px',
+    overflowY: 'auto',
+  },
+  violationItem: {
+    padding: '0.5rem 1rem',
+    borderBottom: '1px solid #1e293b',
+    fontSize: '0.8rem',
+    color: '#fca5a5',
+    backgroundColor: '#450a0a',
+  },
+  violationEmpty: {
+    padding: '1rem',
+    textAlign: 'center',
+    color: '#64748b',
+    fontSize: '0.85rem',
+  },
+}
+
 export default function Host() {
   const navigate = useNavigate()
   const [roundNameInput, setRoundNameInput] = useState('Round 1')
@@ -114,140 +326,173 @@ export default function Host() {
   }
 
   const roundColor = {
-    Idle: '#888',
+    Idle: '#6b7280',
     Active: '#22c55e',
     Locked: '#ef4444',
   }
 
+  const teamCount = Object.keys(state.teams).length
+  const memberCount = Object.values(state.teams).reduce((sum, m) => sum + m.length, 0)
+
   return (
-    <div style={{ padding: '2rem', maxWidth: '900px', margin: '0 auto' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <h1>Host Dashboard</h1>
-        <div>
-          <span style={{ color: connected ? 'green' : 'red', marginRight: '1rem' }}>
-            {connected ? 'Connected' : 'Disconnected'}
+    <div style={styles.page}>
+      {/* Header */}
+      <div style={styles.header}>
+        <h1 style={styles.headerTitle}>Host Dashboard</h1>
+        <div style={styles.headerRight}>
+          <span style={{ ...styles.stateBadge, backgroundColor: roundColor[state.roundState] || '#6b7280' }}>
+            {state.roundState}
           </span>
-          <button onClick={handleLogout} style={{ padding: '0.3rem 0.8rem' }}>Logout</button>
+          <button onClick={handleLogout} style={styles.logoutBtn}>Logout</button>
         </div>
       </div>
 
-      <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
-        <button onClick={() => sendControl('start')}>START BUZZER</button>
-        <button onClick={() => sendControl('lock')}>LOCK BUZZER</button>
-        <button onClick={() => sendControl('reset')}>RESET BUZZER</button>
-        <button onClick={() => sendControl('reset')}>NEXT</button>
-        <span style={{
-          padding: '0.5rem 1rem',
-          borderRadius: '4px',
-          color: '#fff',
-          backgroundColor: roundColor[state.roundState] || '#888',
-          fontWeight: 'bold',
-        }}>
-          {state.roundState}
-        </span>
+      {/* Control Bar */}
+      <div style={styles.controlBar}>
+        <button
+          onClick={() => sendControl('start')}
+          style={{ ...styles.ctrlBtn, backgroundColor: '#16a34a' }}
+        >
+          ▶ START
+        </button>
+        <button
+          onClick={() => sendControl('lock')}
+          style={{ ...styles.ctrlBtn, backgroundColor: '#d97706' }}
+        >
+          🔒 LOCK
+        </button>
+        <button
+          onClick={() => sendControl('reset')}
+          style={{ ...styles.ctrlBtn, backgroundColor: '#dc2626' }}
+        >
+          ↺ RESET
+        </button>
+        <button
+          onClick={() => sendControl('reset')}
+          style={{ ...styles.ctrlBtn, backgroundColor: '#2563eb' }}
+        >
+          ⏭ NEXT
+        </button>
+
+        <div style={styles.roundInput}>
+          <span style={{ color: '#94a3b8', fontSize: '0.85rem' }}>Round:</span>
+          <input
+            type="text"
+            value={roundNameInput}
+            onChange={(e) => setRoundNameInput(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleSetRoundName()}
+            style={styles.input}
+          />
+          <button onClick={handleSetRoundName} style={styles.setBtn}>Set</button>
+          <span style={{ color: '#64748b', fontSize: '0.8rem', marginLeft: '0.25rem' }}>
+            {state.roundName}
+          </span>
+        </div>
       </div>
 
-      <div style={{ marginBottom: '1.5rem' }}>
-        <label>Round Name: </label>
-        <input
-          type="text"
-          value={roundNameInput}
-          onChange={(e) => setRoundNameInput(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && handleSetRoundName()}
-          style={{ padding: '0.3rem', marginRight: '0.5rem' }}
-        />
-        <button onClick={handleSetRoundName} style={{ padding: '0.3rem 0.8rem' }}>Set</button>
-        <span style={{ marginLeft: '1rem', color: '#888' }}>Current: {state.roundName}</span>
+      {/* Two Column Grid */}
+      <div style={styles.grid}>
+        {/* Left: Buzzer Order */}
+        <div style={styles.card}>
+          <div style={styles.cardHeader}>
+            Buzzer Order
+            <span style={{ color: '#64748b', fontWeight: '400', fontSize: '0.8rem', marginLeft: '0.5rem' }}>
+              ({state.buzzerOrder.length})
+            </span>
+          </div>
+          <div style={styles.cardBody}>
+            {state.buzzerOrder.length === 0 ? (
+              <div style={styles.emptyRow}>No buzzer presses yet</div>
+            ) : (
+              <table style={styles.table}>
+                <thead>
+                  <tr>
+                    <th style={styles.th}>#</th>
+                    <th style={styles.th}>Team</th>
+                    <th style={styles.th}>Time</th>
+                    <th style={styles.th}>User</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {state.buzzerOrder.map((event, i) => (
+                    <tr key={event.username} style={{ backgroundColor: i < 3 ? 'rgba(34,197,94,0.05)' : 'transparent' }}>
+                      <td style={styles.td}>
+                        {i < 3 ? medals[i] + ' ' : ''}#{event.position}
+                      </td>
+                      <td style={styles.td}>{event.team_name}</td>
+                      <td style={{ ...styles.td, color: '#94a3b8', fontVariantNumeric: 'tabular-nums' }}>{event.timestamp}</td>
+                      <td style={styles.td}>{event.username}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </div>
+
+        {/* Right: Teams */}
+        <div style={styles.card}>
+          <div style={styles.cardHeader}>
+            Teams
+            <span style={{ color: '#64748b', fontWeight: '400', fontSize: '0.8rem', marginLeft: '0.5rem' }}>
+              ({teamCount} teams, {memberCount} members)
+            </span>
+          </div>
+          <div style={styles.cardBody}>
+            {teamCount === 0 ? (
+              <div style={styles.emptyRow}>No teams joined yet</div>
+            ) : (
+              Object.entries(state.teams).map(([name, usernames]) => (
+                <div key={name} style={styles.teamCard}>
+                  <div style={styles.teamHeader}>
+                    <span style={styles.teamName}>{name}</span>
+                    <button
+                      onClick={() => handleDisqualify(name, null)}
+                      style={styles.dqBtn}
+                    >
+                      Disqualify
+                    </button>
+                  </div>
+                  {usernames.map((u) => (
+                    <div key={u} style={styles.memberRow}>
+                      <span style={styles.memberName}>{u}</span>
+                      <button
+                        onClick={() => handleDisqualify(name, u)}
+                        style={styles.removeBtn}
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ))
+            )}
+          </div>
+        </div>
       </div>
 
-      <h2>Buzzer Order</h2>
-      <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '2rem' }}>
-        <thead>
-          <tr style={{ borderBottom: '2px solid #333' }}>
-            <th style={{ textAlign: 'left', padding: '0.5rem' }}>Position</th>
-            <th style={{ textAlign: 'left', padding: '0.5rem' }}>Team</th>
-            <th style={{ textAlign: 'left', padding: '0.5rem' }}>Time</th>
-            <th style={{ textAlign: 'left', padding: '0.5rem' }}>Status</th>
-          </tr>
-        </thead>
-        <tbody>
-          {state.buzzerOrder.length === 0 ? (
-            <tr>
-              <td colSpan="4" style={{ padding: '1rem', textAlign: 'center', color: '#888' }}>
-                No buzzer presses yet
-              </td>
-            </tr>
+      {/* Violations - Full Width */}
+      <div style={styles.violationBar}>
+        <div style={styles.violationHeader}>
+          ⚠ Violation Alerts
+          <span style={{ color: '#64748b', fontWeight: '400', fontSize: '0.8rem', marginLeft: '0.5rem' }}>
+            ({state.violations.length})
+          </span>
+        </div>
+        <div style={styles.violationList}>
+          {state.violations.length === 0 ? (
+            <div style={styles.violationEmpty}>No violations</div>
           ) : (
-            state.buzzerOrder.map((event, i) => (
-              <tr key={event.username} style={{ borderBottom: '1px solid #444' }}>
-                <td style={{ padding: '0.5rem' }}>
-                  {i < 3 ? medals[i] : ''} #{event.position}
-                </td>
-                <td style={{ padding: '0.5rem' }}>{event.team_name}</td>
-                <td style={{ padding: '0.5rem' }}>{event.timestamp}</td>
-                <td style={{ padding: '0.5rem' }}>{event.username}</td>
-              </tr>
+            state.violations.slice().reverse().map((v, i) => (
+              <div key={i} style={{
+                ...styles.violationItem,
+                backgroundColor: i === 0 ? '#7f1d1d' : '#450a0a',
+              }}>
+                ⚠️ {v.teamName} — {v.username}: {v.kind} ({v.time})
+              </div>
             ))
           )}
-        </tbody>
-      </table>
-
-      <h2>Teams</h2>
-      <ul style={{ listStyle: 'none', padding: 0 }}>
-        {Object.keys(state.teams).length === 0 ? (
-          <li style={{ color: '#888' }}>No teams joined yet</li>
-        ) : (
-          Object.entries(state.teams).map(([name, usernames]) => (
-            <li key={name} style={{
-              padding: '0.75rem',
-              marginBottom: '0.5rem',
-              borderRadius: '4px',
-              backgroundColor: '#1e293b',
-            }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontWeight: 'bold' }}>{name}</span>
-                <button
-                  onClick={() => handleDisqualify(name, null)}
-                  style={{ padding: '0.2rem 0.5rem', backgroundColor: '#ef4444', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
-                >
-                  Disqualify Team
-                </button>
-              </div>
-              <ul style={{ listStyle: 'none', padding: '0.5rem 0 0 1rem', margin: 0 }}>
-                {usernames.map((u) => (
-                  <li key={u} style={{ display: 'flex', justifyContent: 'space-between', padding: '0.2rem 0' }}>
-                    <span>{u}</span>
-                    <button
-                      onClick={() => handleDisqualify(name, u)}
-                      style={{ padding: '0.1rem 0.4rem', backgroundColor: '#f59e0b', color: '#000', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '0.8rem' }}
-                    >
-                      Remove
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </li>
-          ))
-        )}
-      </ul>
-
-      <h2>Violation Alerts</h2>
-      <div style={{ maxHeight: '200px', overflowY: 'auto' }}>
-        {state.violations.length === 0 ? (
-          <p style={{ color: '#888' }}>No violations</p>
-        ) : (
-          state.violations.slice().reverse().map((v, i) => (
-            <div key={i} style={{
-              padding: '0.5rem',
-              marginBottom: '0.3rem',
-              borderRadius: '4px',
-              backgroundColor: '#7f1d1d',
-              fontSize: '0.9rem',
-            }}>
-              ⚠️ {v.teamName} — {v.username}: {v.kind} ({v.time})
-            </div>
-          ))
-        )}
+        </div>
       </div>
     </div>
   )

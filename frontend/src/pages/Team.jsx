@@ -19,6 +19,8 @@ function teamReducer(state, action) {
       return { ...state, buzzerPosition: action.position }
     case 'SET_ROUND_STATE':
       return { ...state, roundState: action.state }
+    case 'SET_TEAM_LIST':
+      return { ...state, teamList: action.teams }
     case 'BUZZER_UPDATE': {
       const myEvent = action.buzzerOrder.find(
         (e) => e.username === state.username
@@ -45,6 +47,7 @@ function teamReducer(state, action) {
 export default function Team() {
   const [joinError, setJoinError] = useState('')
   const [chosenAction, setChosenAction] = useState('')
+  const [teamSearch, setTeamSearch] = useState('')
 
   const [state, dispatch] = useReducer(teamReducer, {
     screen: 'choose',
@@ -56,6 +59,7 @@ export default function Team() {
     buzzerDisabled: false,
     buzzerPosition: null,
     roundState: 'Idle',
+    teamList: [],
   })
 
   const handleServerMessage = useCallback(
@@ -72,6 +76,9 @@ export default function Team() {
           break
         case 'error':
           setJoinError(msg.message)
+          break
+        case 'team_list':
+          dispatch({ type: 'SET_TEAM_LIST', teams: msg.teams || [] })
           break
         case 'buzzer_update':
           dispatch({
@@ -101,7 +108,11 @@ export default function Team() {
     dispatch({ type: 'SET_SCREEN', screen: 'teamname' })
     dispatch({ type: 'SET_TEAM_NAME', name: '' })
     setJoinError('')
+    setTeamSearch('')
     setChosenAction(action)
+    if (action === 'join') {
+      send({ type: 'get_teams' })
+    }
   }
 
   const handleJoin = () => {
@@ -127,6 +138,10 @@ export default function Team() {
     dispatch({ type: 'SET_SCREEN', screen: 'choose' })
     setJoinError('')
   }
+
+  const filteredTeams = state.teamList.filter((t) =>
+    t.toLowerCase().includes(teamSearch.toLowerCase())
+  )
 
   useEffect(() => {
     if (!connected) return
@@ -164,6 +179,9 @@ export default function Team() {
     }
   }, [connected, send])
 
+  const inputStyle = { padding: '0.5rem', width: '250px', marginBottom: '0.75rem' }
+  const btnStyle = { padding: '0.5rem 1.5rem' }
+
   // Screen 1: Choose
   if (state.screen === 'choose') {
     return (
@@ -183,36 +201,86 @@ export default function Team() {
             JOIN TEAM
           </button>
         </div>
-        <p style={{ color: connected ? 'green' : 'red', marginTop: '1rem' }}>
-          {connected ? 'Connected' : 'Disconnected'}
-        </p>
       </div>
     )
   }
 
-  // Screen 2: Team Name
+  // Screen 2: Team Name (Create or Join)
   if (state.screen === 'teamname') {
     return (
       <div style={{ padding: '2rem', textAlign: 'center' }}>
         <h1>TUNE TRACKER</h1>
-        <p>Enter Team Name</p>
-        <input
-          type="text"
-          placeholder="Team Name"
-          value={state.teamName}
-          onChange={(e) => dispatch({ type: 'SET_TEAM_NAME', name: e.target.value })}
-          onKeyDown={(e) => e.key === 'Enter' && handleJoin()}
-          style={{ padding: '0.5rem', width: '200px', marginBottom: '1rem' }}
-        />
+        {chosenAction === 'create' ? (
+          <>
+            <p>Enter Team Name</p>
+            <input
+              type="text"
+              placeholder="Team Name"
+              value={state.teamName}
+              onChange={(e) => dispatch({ type: 'SET_TEAM_NAME', name: e.target.value })}
+              onKeyDown={(e) => e.key === 'Enter' && handleJoin()}
+              style={inputStyle}
+            />
+          </>
+        ) : (
+          <>
+            <p>Select or search for a team to join</p>
+            <input
+              type="text"
+              placeholder="Search teams..."
+              value={teamSearch}
+              onChange={(e) => setTeamSearch(e.target.value)}
+              style={{ ...inputStyle, marginBottom: '0.5rem' }}
+            />
+            <div style={{ maxHeight: '200px', overflowY: 'auto', border: '1px solid #555', borderRadius: '4px', marginBottom: '0.75rem', width: '250px', marginLeft: 'auto', marginRight: 'auto' }}>
+              {filteredTeams.length === 0 ? (
+                <p style={{ padding: '0.75rem', color: '#888', margin: 0 }}>
+                  {state.teamList.length === 0 ? 'No teams available' : 'No matching teams'}
+                </p>
+              ) : (
+                filteredTeams.map((t) => (
+                  <div
+                    key={t}
+                    onClick={() => dispatch({ type: 'SET_TEAM_NAME', name: t })}
+                    style={{
+                      padding: '0.5rem 0.75rem',
+                      cursor: 'pointer',
+                      borderBottom: '1px solid #444',
+                      backgroundColor: state.teamName === t ? '#3b82f6' : 'transparent',
+                      color: state.teamName === t ? '#fff' : '#ccc',
+                    }}
+                  >
+                    {t}
+                  </div>
+                ))
+              )}
+            </div>
+            {state.teamName && (
+              <p style={{ color: '#aaa', margin: '0 0 0.5rem 0' }}>
+                Selected: <strong>{state.teamName}</strong>
+              </p>
+            )}
+            {!state.teamName && (
+              <p style={{ color: '#888', margin: '0 0 0.5rem 0' }}>
+                Or type a team name below
+              </p>
+            )}
+            <input
+              type="text"
+              placeholder="Team Name"
+              value={state.teamName}
+              onChange={(e) => dispatch({ type: 'SET_TEAM_NAME', name: e.target.value })}
+              onKeyDown={(e) => e.key === 'Enter' && handleJoin()}
+              style={inputStyle}
+            />
+          </>
+        )}
         <br />
-        <button onClick={handleJoin} style={{ padding: '0.5rem 1.5rem', marginRight: '0.5rem' }}>
+        <button onClick={handleJoin} style={{ ...btnStyle, marginRight: '0.5rem' }}>
           {chosenAction === 'create' ? 'CREATE' : 'JOIN'}
         </button>
-        <button onClick={handleBack} style={{ padding: '0.5rem 1.5rem' }}>BACK</button>
-        {joinError && <p style={{ color: 'red' }}>{joinError}</p>}
-        <p style={{ color: connected ? 'green' : 'red' }}>
-          {connected ? 'Connected' : 'Disconnected'}
-        </p>
+        <button onClick={handleBack} style={btnStyle}>BACK</button>
+        {joinError && <p style={{ color: 'red', marginTop: '0.5rem' }}>{joinError}</p>}
       </div>
     )
   }
@@ -229,14 +297,11 @@ export default function Team() {
           value={state.username}
           onChange={(e) => dispatch({ type: 'SET_USERNAME', name: e.target.value })}
           onKeyDown={(e) => e.key === 'Enter' && handleSubmitUsername()}
-          style={{ padding: '0.5rem', width: '200px', marginBottom: '1rem' }}
+          style={inputStyle}
         />
         <br />
-        <button onClick={handleSubmitUsername} style={{ padding: '0.5rem 1.5rem' }}>SUBMIT</button>
-        {joinError && <p style={{ color: 'red' }}>{joinError}</p>}
-        <p style={{ color: connected ? 'green' : 'red' }}>
-          {connected ? 'Connected' : 'Disconnected'}
-        </p>
+        <button onClick={handleSubmitUsername} style={btnStyle}>SUBMIT</button>
+        {joinError && <p style={{ color: 'red', marginTop: '0.5rem' }}>{joinError}</p>}
       </div>
     )
   }
@@ -248,9 +313,6 @@ export default function Team() {
       <p>Round: {state.roundName}</p>
       <p style={{ color: state.roundState === 'Active' ? 'green' : '#888' }}>
         {state.roundState === 'Active' ? '🟢 Buzzer Active' : '⏸ Buzzer Inactive'}
-      </p>
-      <p style={{ color: connected ? 'green' : 'red' }}>
-        {connected ? 'Connected' : 'Disconnected'}
       </p>
       <p>Status: {state.myStatus}</p>
       {state.buzzerPosition !== null && <p>Position: #{state.buzzerPosition}</p>}
