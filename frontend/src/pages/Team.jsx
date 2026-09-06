@@ -528,7 +528,7 @@ export default function Team() {
                 </button>
               </div>
 
-              {state.buzzerDisabled && <p className="buzzer-msg">✓ BUZZER REGISTERED</p>}
+              {state.buzzerDisabled && state.roundState === 'Active' && <p className="buzzer-msg">✓ BUZZER REGISTERED</p>}
 
               {state.teamMembers.length > 0 && (
                 <div className="member-list">
