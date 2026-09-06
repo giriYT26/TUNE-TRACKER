@@ -33,13 +33,14 @@ pub struct Round {
     pub state: RoundState,
     pub buzzer_order: Vec<BuzzerEvent>,
     pub name: String,
+    pub started_at_ms: Option<u64>,
 }
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ServerMessage {
     BuzzerUpdate { buzzer_order: Vec<BuzzerEvent> },
-    RoundState { state: RoundState },
+    RoundState { state: RoundState, started_at_ms: Option<u64> },
     RoundName { name: String },
     TeamStatus { team_name: String, username: String, status: TeamStatus, warning_count: u8 },
     TeamJoined { team_name: String, usernames: Vec<String> },
@@ -79,6 +80,7 @@ impl AppState {
                 state: RoundState::Idle,
                 buzzer_order: Vec::new(),
                 name: "Round 1".to_string(),
+                started_at_ms: None,
             }),
             tx,
             connected_teams: RwLock::new(HashMap::new()),
@@ -166,8 +168,14 @@ impl AppState {
 
     pub async fn set_round_state(&self, state: RoundState) {
         let mut round = self.current_round.write().await;
+        if state == RoundState::Active {
+            round.started_at_ms = Some(chrono::Utc::now().timestamp_millis() as u64);
+        } else if state == RoundState::Idle {
+            round.started_at_ms = None;
+        }
+        let started_at_ms = round.started_at_ms;
         round.state = state.clone();
-        let _ = self.tx.send(ServerMessage::RoundState { state });
+        let _ = self.tx.send(ServerMessage::RoundState { state, started_at_ms });
     }
 
     pub async fn set_round_name(&self, name: String) {
@@ -179,10 +187,16 @@ impl AppState {
     pub async fn reset_buzzer(&self) {
         let mut round = self.current_round.write().await;
         round.buzzer_order.clear();
+        round.started_at_ms = None;
+        round.state = RoundState::Idle;
         let update = ServerMessage::BuzzerUpdate {
             buzzer_order: Vec::new(),
         };
         let _ = self.tx.send(update);
+        let _ = self.tx.send(ServerMessage::RoundState {
+            state: RoundState::Idle,
+            started_at_ms: None,
+        });
     }
 
     pub async fn handle_violation(&self, username: String, kind: String) {

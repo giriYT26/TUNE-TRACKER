@@ -59,11 +59,17 @@ function teamReducer(state, action) {
       const myEvent = action.buzzerOrder.find(
         (e) => e.team_name === state.teamName
       )
+      const nowBuzzed = myEvent ? true : state.teamBuzzed
+      const buzzTime = (nowBuzzed && !state.teamBuzzed && state.roundStartTime)
+        ? Date.now() - state.roundStartTime
+        : state.teamBuzzTime
       return {
         ...state,
         buzzerPosition: myEvent?.position ?? state.buzzerPosition,
         myStatus: myEvent ? 'Answering' : state.myStatus,
-        buzzerDisabled: myEvent ? true : state.buzzerDisabled,
+        buzzerDisabled: nowBuzzed,
+        teamBuzzed: nowBuzzed,
+        teamBuzzTime: buzzTime,
       }
     }
     case 'ROUND_STATE_CHANGE':
@@ -73,8 +79,9 @@ function teamReducer(state, action) {
         buzzerDisabled: action.state !== 'Active',
         buzzerPosition: action.state === 'Active' ? null : state.buzzerPosition,
         myStatus: action.state === 'Active' ? 'Waiting' : state.myStatus,
-        roundStartTime: action.state === 'Active' ? Date.now() : null,
+        roundStartTime: action.state === 'Active' ? action.startedAtMs : null,
         reactionTime: action.state === 'Active' ? null : state.reactionTime,
+        teamBuzzed: action.state === 'Active' ? false : state.teamBuzzed,
       }
     case 'RESET_SESSION':
       return {
@@ -91,6 +98,8 @@ function teamReducer(state, action) {
         teamMembers: [],
         roundStartTime: null,
         reactionTime: null,
+        teamBuzzed: false,
+        teamBuzzTime: null,
       }
     default:
       return state
@@ -113,9 +122,11 @@ function getInitialState() {
       teamList: [],
       teamMembers: [],
       roundStartTime: null,
-      reactionTime: null,
+        reactionTime: null,
+        teamBuzzed: false,
+        teamBuzzTime: null,
+      }
     }
-  }
   return {
     screen: 'choose',
     teamName: '',
@@ -130,6 +141,8 @@ function getInitialState() {
     teamMembers: [],
     roundStartTime: null,
     reactionTime: null,
+    teamBuzzed: false,
+    teamBuzzTime: null,
   }
 }
 
@@ -145,12 +158,12 @@ export default function Team() {
   const [state, dispatch] = useReducer(teamReducer, null, getInitialState)
   const [tick, setTick] = useState(0)
 
-  // Live ticking timer — updates display every 50ms while round is active
+  // Live ticking timer — updates display every 50ms while round is active and team hasn't buzzed
   useEffect(() => {
-    if (state.roundState !== 'Active' || state.reactionTime !== null) return
+    if (state.roundState !== 'Active' || state.reactionTime !== null || state.teamBuzzed) return
     const id = setInterval(() => setTick((t) => t + 1), 50)
     return () => clearInterval(id)
-  }, [state.roundState, state.reactionTime])
+  }, [state.roundState, state.reactionTime, state.teamBuzzed])
 
   // Toggle buzzer-active class on html/body/#root for fullscreen bg
   useEffect(() => {
@@ -192,7 +205,7 @@ export default function Team() {
           })
           break
         case 'round_state':
-          dispatch({ type: 'ROUND_STATE_CHANGE', state: msg.state })
+          dispatch({ type: 'ROUND_STATE_CHANGE', state: msg.state, startedAtMs: msg.started_at_ms })
           break
         case 'round_name':
           dispatch({ type: 'SET_ROUND_NAME', name: msg.name })
@@ -506,14 +519,16 @@ export default function Team() {
                 )}
               </div>
 
-              {/* Reaction Timer */}
-              <div className={`reaction-timer${state.reactionTime !== null ? ' frozen' : ''}`}>
-                {state.reactionTime !== null
-                  ? formatReactionTime(state.reactionTime)
+            {/* Reaction Timer */}
+            <div className={`reaction-timer${state.reactionTime !== null || state.teamBuzzed ? ' frozen' : ''}`}>
+              {state.reactionTime !== null
+                ? formatReactionTime(state.reactionTime)
+                : state.teamBuzzed && state.teamBuzzTime !== null
+                  ? formatReactionTime(state.teamBuzzTime)
                   : state.roundStartTime
                     ? formatReactionTime(Date.now() - state.roundStartTime)
                     : '0:00.000'}
-              </div>
+            </div>
 
               <div style={{ margin: '1.5rem 0' }}>
                 <button

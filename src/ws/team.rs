@@ -37,6 +37,7 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
             .send(Message::Text(
                 serde_json::to_string(&ServerMessage::RoundState {
                     state: round.state.clone(),
+                    started_at_ms: round.started_at_ms,
                 })
                 .unwrap()
                 .into(),

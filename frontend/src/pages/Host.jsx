@@ -288,7 +288,7 @@ export default function Host() {
         dispatch({ type: 'BUZZER_UPDATE', buzzerOrder: msg.buzzer_order })
         break
       case 'round_state':
-        dispatch({ type: 'ROUND_STATE', state: msg.state })
+        dispatch({ type: 'ROUND_STATE', state: msg.state, startedAtMs: msg.started_at_ms })
         break
       case 'round_name':
         dispatch({ type: 'ROUND_NAME', name: msg.name })

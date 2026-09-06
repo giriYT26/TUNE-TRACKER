@@ -26,6 +26,7 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
         let _ = sender.send(Message::Text(serde_json::to_string(&update).unwrap().into())).await;
         let state_msg = crate::state::ServerMessage::RoundState {
             state: round.state.clone(),
+            started_at_ms: round.started_at_ms,
         };
         let _ = sender.send(Message::Text(serde_json::to_string(&state_msg).unwrap().into())).await;
         let name_msg = crate::state::ServerMessage::RoundName {
