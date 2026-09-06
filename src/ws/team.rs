@@ -32,8 +32,8 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
         };
 
         match parsed {
-            ClientMessage::Join { team_name: name } => {
-                match state.join_team(name.clone()).await {
+            ClientMessage::Join { team_name: name, action } => {
+                match state.join_team(name.clone(), action).await {
                     Ok(()) => {
                         team_name = Some(name);
                         let reply = serde_json::json!({

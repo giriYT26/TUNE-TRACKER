@@ -47,7 +47,7 @@ pub enum ServerMessage {
 #[derive(Debug, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ClientMessage {
-    Join { team_name: String },
+    Join { team_name: String, action: String },
     Username { username: String },
     Buzz,
     Violation { kind: String },
@@ -81,14 +81,22 @@ impl AppState {
         }
     }
 
-    pub async fn join_team(&self, team_name: String) -> Result<(), String> {
+    pub async fn join_team(&self, team_name: String, action: String) -> Result<(), String> {
         let teams = self.connected_teams.read().await;
-        if teams.contains_key(&team_name) {
-            return Err("Team name already taken".to_string());
-        }
+        let team_exists = teams.contains_key(&team_name);
         drop(teams);
-        let mut teams = self.connected_teams.write().await;
-        teams.entry(team_name).or_insert_with(Vec::new);
+
+        if action == "create" {
+            if team_exists {
+                return Err("Team name already taken".to_string());
+            }
+            let mut teams = self.connected_teams.write().await;
+            teams.insert(team_name, Vec::new());
+        } else {
+            if !team_exists {
+                return Err("Team not found. Create a new team instead.".to_string());
+            }
+        }
         Ok(())
     }
 

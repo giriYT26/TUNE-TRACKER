@@ -44,11 +44,13 @@ function teamReducer(state, action) {
 
 export default function Team() {
   const [joinError, setJoinError] = useState('')
+  const [chosenAction, setChosenAction] = useState('')
 
   const [state, dispatch] = useReducer(teamReducer, {
-    screen: 'join',
+    screen: 'choose',
     teamName: '',
     username: '',
+    action: '',
     roundName: 'Round 1',
     myStatus: 'Waiting',
     buzzerDisabled: false,
@@ -95,11 +97,18 @@ export default function Team() {
 
   const { connected, send } = useWebSocket('/ws/team', handleServerMessage)
 
+  const handleChoose = (action) => {
+    dispatch({ type: 'SET_SCREEN', screen: 'teamname' })
+    dispatch({ type: 'SET_TEAM_NAME', name: '' })
+    setJoinError('')
+    setChosenAction(action)
+  }
+
   const handleJoin = () => {
     const name = state.teamName.trim()
     if (!name) return
     setJoinError('')
-    send({ type: 'join', team_name: name })
+    send({ type: 'join', team_name: name, action: chosenAction })
   }
 
   const handleSubmitUsername = () => {
@@ -112,6 +121,11 @@ export default function Team() {
   const handleBuzz = () => {
     send({ type: 'buzz' })
     dispatch({ type: 'SET_BUZZER_DISABLED', disabled: true })
+  }
+
+  const handleBack = () => {
+    dispatch({ type: 'SET_SCREEN', screen: 'choose' })
+    setJoinError('')
   }
 
   useEffect(() => {
@@ -150,8 +164,34 @@ export default function Team() {
     }
   }, [connected, send])
 
-  // Screen 1: Join
-  if (state.screen === 'join') {
+  // Screen 1: Choose
+  if (state.screen === 'choose') {
+    return (
+      <div style={{ padding: '2rem', textAlign: 'center' }}>
+        <h1>TUNE TRACKER</h1>
+        <div style={{ marginTop: '2rem' }}>
+          <button
+            onClick={() => handleChoose('create')}
+            style={{ padding: '1rem 2rem', fontSize: '1.1rem', marginBottom: '1rem', display: 'block', width: '250px', marginLeft: 'auto', marginRight: 'auto' }}
+          >
+            CREATE TEAM
+          </button>
+          <button
+            onClick={() => handleChoose('join')}
+            style={{ padding: '1rem 2rem', fontSize: '1.1rem', display: 'block', width: '250px', marginLeft: 'auto', marginRight: 'auto' }}
+          >
+            JOIN TEAM
+          </button>
+        </div>
+        <p style={{ color: connected ? 'green' : 'red', marginTop: '1rem' }}>
+          {connected ? 'Connected' : 'Disconnected'}
+        </p>
+      </div>
+    )
+  }
+
+  // Screen 2: Team Name
+  if (state.screen === 'teamname') {
     return (
       <div style={{ padding: '2rem', textAlign: 'center' }}>
         <h1>TUNE TRACKER</h1>
@@ -165,7 +205,10 @@ export default function Team() {
           style={{ padding: '0.5rem', width: '200px', marginBottom: '1rem' }}
         />
         <br />
-        <button onClick={handleJoin} style={{ padding: '0.5rem 1.5rem' }}>JOIN EVENT</button>
+        <button onClick={handleJoin} style={{ padding: '0.5rem 1.5rem', marginRight: '0.5rem' }}>
+          {chosenAction === 'create' ? 'CREATE' : 'JOIN'}
+        </button>
+        <button onClick={handleBack} style={{ padding: '0.5rem 1.5rem' }}>BACK</button>
         {joinError && <p style={{ color: 'red' }}>{joinError}</p>}
         <p style={{ color: connected ? 'green' : 'red' }}>
           {connected ? 'Connected' : 'Disconnected'}
@@ -174,7 +217,7 @@ export default function Team() {
     )
   }
 
-  // Screen 2: Username
+  // Screen 3: Username
   if (state.screen === 'username') {
     return (
       <div style={{ padding: '2rem', textAlign: 'center' }}>
@@ -198,7 +241,7 @@ export default function Team() {
     )
   }
 
-  // Screen 3: Buzzer
+  // Screen 4: Buzzer
   return (
     <div style={{ padding: '2rem', textAlign: 'center' }}>
       <h2>{state.teamName}</h2>
