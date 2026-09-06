@@ -143,6 +143,14 @@ export default function Team() {
   const reregisteredRef = useRef(false)
 
   const [state, dispatch] = useReducer(teamReducer, null, getInitialState)
+  const [tick, setTick] = useState(0)
+
+  // Live ticking timer — updates display every 50ms while round is active
+  useEffect(() => {
+    if (state.roundState !== 'Active' || state.reactionTime !== null) return
+    const id = setInterval(() => setTick((t) => t + 1), 50)
+    return () => clearInterval(id)
+  }, [state.roundState, state.reactionTime])
 
   const handleServerMessage = useCallback(
     (msg) => {
@@ -447,7 +455,9 @@ export default function Team() {
             <div className={`reaction-timer${state.reactionTime !== null ? ' frozen' : ''}`}>
               {state.reactionTime !== null
                 ? formatReactionTime(state.reactionTime)
-                : '0:00.000'}
+                : state.roundStartTime
+                  ? formatReactionTime(Date.now() - state.roundStartTime)
+                  : '0:00.000'}
             </div>
 
             <div style={{ margin: '1.5rem 0' }}>
