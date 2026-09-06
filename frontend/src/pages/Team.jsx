@@ -24,6 +24,13 @@ function clearSession() {
   } catch {}
 }
 
+function formatReactionTime(ms) {
+  const min = Math.floor(ms / 60000)
+  const sec = Math.floor((ms % 60000) / 1000)
+  const msPart = ms % 1000
+  return `${min}:${String(sec).padStart(2, '0')}.${String(msPart).padStart(3, '0')}`
+}
+
 function teamReducer(state, action) {
   switch (action.type) {
     case 'SET_SCREEN':
@@ -44,6 +51,10 @@ function teamReducer(state, action) {
       return { ...state, roundState: action.state }
     case 'SET_TEAM_LIST':
       return { ...state, teamList: action.teams }
+    case 'SET_TEAM_MEMBERS':
+      return { ...state, teamMembers: action.members }
+    case 'SET_REACTION_TIME':
+      return { ...state, reactionTime: action.time }
     case 'BUZZER_UPDATE': {
       const myEvent = action.buzzerOrder.find(
         (e) => e.team_name === state.teamName
@@ -52,6 +63,7 @@ function teamReducer(state, action) {
         ...state,
         buzzerPosition: myEvent?.position ?? state.buzzerPosition,
         myStatus: myEvent ? 'Answering' : state.myStatus,
+        buzzerDisabled: myEvent ? true : state.buzzerDisabled,
       }
     }
     case 'ROUND_STATE_CHANGE':
@@ -61,6 +73,8 @@ function teamReducer(state, action) {
         buzzerDisabled: action.state !== 'Active',
         buzzerPosition: action.state === 'Active' ? null : state.buzzerPosition,
         myStatus: action.state === 'Active' ? 'Waiting' : state.myStatus,
+        roundStartTime: action.state === 'Active' ? Date.now() : null,
+        reactionTime: action.state === 'Active' ? null : state.reactionTime,
       }
     case 'RESET_SESSION':
       return {
@@ -74,6 +88,9 @@ function teamReducer(state, action) {
         buzzerPosition: null,
         roundState: 'Idle',
         teamList: state.teamList,
+        teamMembers: [],
+        roundStartTime: null,
+        reactionTime: null,
       }
     default:
       return state
@@ -94,6 +111,9 @@ function getInitialState() {
       buzzerPosition: null,
       roundState: 'Idle',
       teamList: [],
+      teamMembers: [],
+      roundStartTime: null,
+      reactionTime: null,
     }
   }
   return {
@@ -107,6 +127,9 @@ function getInitialState() {
     buzzerPosition: null,
     roundState: 'Idle',
     teamList: [],
+    teamMembers: [],
+    roundStartTime: null,
+    reactionTime: null,
   }
 }
 
@@ -139,6 +162,11 @@ export default function Team() {
         case 'team_list':
           dispatch({ type: 'SET_TEAM_LIST', teams: msg.teams || [] })
           break
+        case 'team_joined':
+          if (msg.team_name === state.teamName) {
+            dispatch({ type: 'SET_TEAM_MEMBERS', members: msg.usernames || [] })
+          }
+          break
         case 'buzzer_update':
           dispatch({
             type: 'BUZZER_UPDATE',
@@ -158,7 +186,7 @@ export default function Team() {
           break
       }
     },
-    [state.username]
+    [state.username, state.teamName]
   )
 
   const { connected, send } = useWebSocket('/ws/team', handleServerMessage)
@@ -220,8 +248,17 @@ export default function Team() {
   }
 
   const handleBuzz = () => {
+    if (state.roundStartTime) {
+      dispatch({ type: 'SET_REACTION_TIME', time: Date.now() - state.roundStartTime })
+    }
     send({ type: 'buzz' })
     dispatch({ type: 'SET_BUZZER_DISABLED', disabled: true })
+  }
+
+  const handleLeave = () => {
+    send({ type: 'leave' })
+    dispatch({ type: 'RESET_SESSION' })
+    clearSession()
   }
 
   const handleBack = () => {
@@ -287,12 +324,22 @@ export default function Team() {
         .team-search-list { max-height: 200px; overflow-y: auto; border: 1px solid #555; border-radius: 4px; margin-bottom: 0.75rem; width: 250px; max-width: 80vw; margin-left: auto; margin-right: auto; }
         .team-search-item { padding: 0.5rem 0.75rem; cursor: pointer; border-bottom: 1px solid #444; }
         .team-error { color: red; margin-top: 0.5rem; }
+        .leave-btn { padding: 0.4rem 1rem; font-size: 0.85rem; background: transparent; color: #94a3b8; border: 1px solid #475569; border-radius: 6px; cursor: pointer; margin-top: 1rem; }
+        .leave-btn:hover { color: #ef4444; border-color: #ef4444; }
+        .member-list { display: inline-block; text-align: left; background: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 0.5rem 1rem; margin: 0.5rem auto; min-width: 160px; }
+        .member-list-title { font-size: 0.75rem; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.35rem; text-align: center; }
+        .member-item { padding: 0.2rem 0; color: #cbd5e1; font-size: 0.9rem; }
+        .member-item-you { color: #3b82f6; font-weight: 600; }
+        .reaction-timer { font-size: 1.5rem; font-family: monospace; font-variant-numeric: tabular-nums; color: #94a3b8; margin: 0.5rem 0; }
+        .reaction-timer.frozen { color: #22c55e; font-weight: bold; }
         @media (max-width: 480px) {
           .team-root { padding: 1rem; }
           .team-title { font-size: 1.5rem; }
           .team-subtitle { font-size: 1rem; }
           .buzz-btn { font-size: 1.5rem; padding: 0.8rem 2rem; }
           .team-btn-big { padding: 0.8rem 1.5rem; font-size: 1rem; width: 200px; }
+          .reaction-timer { font-size: 1.2rem; }
+          .member-list { min-width: 140px; padding: 0.4rem 0.75rem; }
         }
       `}</style>
 
@@ -383,10 +430,31 @@ export default function Team() {
         {state.screen === 'buzzer' && (
           <>
             <h2 className="team-subtitle">{state.teamName}</h2>
+
+            {/* Team Members */}
+            {state.teamMembers.length > 0 && (
+              <div className="member-list">
+                <div className="member-list-title">Team ({state.teamMembers.length}/4)</div>
+                {state.teamMembers.map((m) => (
+                  <div key={m} className={`member-item${m === state.username ? ' member-item-you' : ''}`}>
+                    {m === state.username ? `${m} (you)` : m}
+                  </div>
+                ))}
+              </div>
+            )}
+
             <p>Round: {state.roundName}</p>
             <p style={{ color: state.roundState === 'Active' ? 'green' : '#888' }}>
               {state.roundState === 'Active' ? '🟢 Buzzer Active' : '⏸ Buzzer Inactive'}
             </p>
+
+            {/* Reaction Timer */}
+            <div className={`reaction-timer${state.reactionTime !== null ? ' frozen' : ''}`}>
+              {state.reactionTime !== null
+                ? formatReactionTime(state.reactionTime)
+                : '0:00.000'}
+            </div>
+
             <p>Status: {state.myStatus}</p>
             {state.buzzerPosition !== null && <p>Position: #{state.buzzerPosition}</p>}
             <button
@@ -400,6 +468,7 @@ export default function Team() {
               BUZZ
             </button>
             {state.buzzerDisabled && <p style={{ color: 'green', fontWeight: 'bold' }}>✓ BUZZER REGISTERED</p>}
+            <button className="leave-btn" onClick={handleLeave}>LEAVE TEAM</button>
           </>
         )}
       </div>

@@ -3,6 +3,8 @@ use std::collections::HashMap;
 use tokio::sync::{broadcast, RwLock};
 use uuid::Uuid;
 
+const MAX_TEAM_SIZE: usize = 4;
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum TeamStatus {
     Waiting,
@@ -58,6 +60,7 @@ pub enum ClientMessage {
     Reset,
     SetRoundName { name: String },
     Disqualify { team_name: String, username: Option<String> },
+    Leave,
 }
 
 pub struct AppState {
@@ -108,6 +111,14 @@ impl AppState {
             return Err("Username already taken".to_string());
         }
         drop(users);
+
+        let teams = self.connected_teams.read().await;
+        let member_count = teams.get(&team_name).map_or(0, |m| m.len());
+        drop(teams);
+
+        if member_count >= MAX_TEAM_SIZE {
+            return Err("Team is full (max 4 members)".to_string());
+        }
 
         let mut users = self.connected_users.write().await;
         users.insert(username.clone(), team_name.clone());
@@ -199,14 +210,40 @@ impl AppState {
         });
     }
 
-    pub async fn remove_user(&self, username: &str) {
-        let mut users = self.connected_users.write().await;
-        users.remove(username);
+    pub async fn remove_user_with_broadcast(&self, username: &str) {
+        let team_name = {
+            let users = self.connected_users.read().await;
+            users.get(username).cloned()
+        };
 
-        let mut teams = self.connected_teams.write().await;
-        for members in teams.values_mut() {
-            members.retain(|u| u != username);
+        let team_name = match team_name {
+            Some(t) => t,
+            None => return,
+        };
+
+        {
+            let mut users = self.connected_users.write().await;
+            users.remove(username);
         }
-        teams.retain(|_, v| !v.is_empty());
+
+        let updated_usernames = {
+            let mut teams = self.connected_teams.write().await;
+            if let Some(members) = teams.get_mut(&team_name) {
+                members.retain(|u| u != username);
+                if members.is_empty() {
+                    teams.remove(&team_name);
+                    Vec::new()
+                } else {
+                    members.clone()
+                }
+            } else {
+                Vec::new()
+            }
+        };
+
+        let _ = self.tx.send(ServerMessage::TeamJoined {
+            team_name,
+            usernames: updated_usernames,
+        });
     }
 }

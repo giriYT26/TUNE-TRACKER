@@ -136,6 +136,9 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
                             state.handle_violation(uname.clone(), kind).await;
                         }
                     }
+                    ClientMessage::Leave => {
+                        break;
+                    }
                     _ => {}
                 }
             }
@@ -149,6 +152,6 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
     }
 
     if let Some(ref uname) = username {
-        state.remove_user(uname).await;
+        state.remove_user_with_broadcast(uname).await;
     }
 }
