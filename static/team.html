@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Tune Tracker — Team</title>
+</head>
+<body>
+  <!-- Join screen -->
+  <div id="join-screen">
+    <h1>TUNE TRACKER</h1>
+    <p>Enter Team Name</p>
+    <input id="team-name-input" type="text" placeholder="Team Name">
+    <button id="join-btn">JOIN EVENT</button>
+    <p id="join-error" style="color: red;"></p>
+  </div>
+
+  <!-- Buzzer screen, hidden until join succeeds -->
+  <div id="buzzer-screen" hidden>
+    <h2 id="team-name-display"></h2>
+    <p>Round: <span id="round-name">-</span></p>
+    <p id="buzzer-status">Buzzer Active</p>
+    <p id="connection-status">Connected</p>
+    <button id="buzzer-btn">BUZZ</button>
+    <p id="buzzer-registered" hidden>BUZZER REGISTERED</p>
+  </div>
+
+  <script src="team.js"></script>
+</body>
+</html>

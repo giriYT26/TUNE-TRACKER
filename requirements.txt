@@ -1,0 +1,29 @@
+# Tune Tracker — requirements
+#
+# This is a Rust project, so dependencies are actually managed in Cargo.toml,
+# not installed via pip. This file lists what you'll need, in plain terms —
+# treat it as a checklist, then add the crates to Cargo.toml with `cargo add`.
+
+## Tooling
+- Rust toolchain (stable), install via rustup
+- Cargo (comes with Rust)
+- A modern browser for testing (Chrome/Firefox) — needed for Page
+  Visibility API / fullscreen API behavior during anti-cheat testing
+
+## Core crates
+- axum            # HTTP + WebSocket server
+- tokio           # async runtime (use "full" feature during development)
+- serde           # (de)serialization, with "derive" feature
+- serde_json      # JSON message encoding for WebSocket messages
+- uuid            # team/session IDs, with "v4" feature
+- chrono          # server-side timestamps for buzzer ordering
+
+## Optional crates
+- sqlx            # if adding SQLite persistence for teams/history
+- tower-http      # static file serving, CORS, if needed
+- tracing / tracing-subscriber   # structured logging, useful once the host
+                                   # dashboard needs debugging under load
+
+## Frontend
+- No package manager required if using plain HTML/CSS/JS served as static
+  files from the Rust server
