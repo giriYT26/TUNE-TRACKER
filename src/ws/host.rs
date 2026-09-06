@@ -80,6 +80,9 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
                 ClientMessage::Disqualify { team_name, username } => {
                     state2.disqualify_user(team_name, username).await;
                 }
+                ClientMessage::ResetViolations => {
+                    state2.reset_violations().await;
+                }
                 _ => {}
             }
         }

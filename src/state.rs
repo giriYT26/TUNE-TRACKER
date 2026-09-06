@@ -61,6 +61,7 @@ pub enum ClientMessage {
     NextQuestion,
     SetRoundName { name: String },
     Disqualify { team_name: String, username: Option<String> },
+    ResetViolations,
     Leave,
 }
 
@@ -271,6 +272,13 @@ impl AppState {
             status: TeamStatus::Disqualified,
             warning_count: 3,
         });
+    }
+
+    pub async fn reset_violations(&self) {
+        let mut counts = self.warning_counts.write().await;
+        counts.clear();
+        let mut dq = self.disqualified_users.write().await;
+        dq.clear();
     }
 
     pub async fn remove_user_with_broadcast(&self, username: &str) {

@@ -28,7 +28,7 @@ function formatReactionTime(ms) {
   const min = Math.floor(ms / 60000)
   const sec = Math.floor((ms % 60000) / 1000)
   const msPart = ms % 1000
-  return `${min}:${String(sec).padStart(2, '0')}.${String(msPart).padStart(3, '0')}`
+  return `${String(min).padStart(2, '0')}:${String(sec).padStart(2, '0')}.${String(msPart).padStart(3, '0')}`
 }
 
 function teamReducer(state, action) {
@@ -71,7 +71,7 @@ function teamReducer(state, action) {
         ...state,
         buzzerOrder: action.buzzerOrder,
         buzzerPosition: myEvent?.position ?? state.buzzerPosition,
-        myStatus: myEvent ? 'Answering' : state.myStatus,
+        myStatus: myEvent ? 'Answered' : state.myStatus,
         buzzerDisabled: nowBuzzed,
         teamBuzzed: nowBuzzed,
         teamBuzzTime: buzzTime,
@@ -84,7 +84,7 @@ function teamReducer(state, action) {
         roundState: action.state,
         buzzerDisabled: action.state !== 'Active',
         buzzerPosition: action.state === 'Active' ? null : state.buzzerPosition,
-        myStatus: action.state === 'Active' ? 'Waiting' : state.myStatus,
+        myStatus: action.state === 'Active' ? 'Pending' : state.myStatus,
         roundStartTime: action.state === 'Active' ? action.startedAtMs : null,
         reactionTime: isNewRound ? null : state.reactionTime,
         teamBuzzed: isNewRound ? false : state.teamBuzzed,
@@ -98,7 +98,7 @@ function teamReducer(state, action) {
         username: '',
         action: '',
         roundName: 'Round 1',
-        myStatus: 'Waiting',
+        myStatus: 'Pending',
         buzzerDisabled: false,
         buzzerPosition: null,
         roundState: 'Idle',
@@ -125,7 +125,7 @@ function getInitialState() {
       username: saved.username || '',
       action: saved.action || '',
       roundName: 'Round 1',
-      myStatus: saved.teamBuzzed ? 'Answering' : 'Waiting',
+      myStatus: saved.teamBuzzed ? 'Answered' : 'Pending',
       buzzerDisabled: saved.teamBuzzed || false,
       buzzerPosition: saved.buzzerPosition ?? null,
       roundState: saved.roundStartTime ? 'Active' : 'Idle',
@@ -166,7 +166,8 @@ export default function Team() {
     const saved = loadSession()
     return saved?.action || ''
   })
-  const [teamSearch, setTeamSearch] = useState('')
+  const [creatingTeam, setCreatingTeam] = useState(false)
+  const [confirmLeave, setConfirmLeave] = useState(false)
   const reregisteredRef = useRef(false)
 
   const [state, dispatch] = useReducer(teamReducer, null, getInitialState)
@@ -208,6 +209,7 @@ export default function Team() {
           dispatch({ type: 'SET_TEAM_LIST', teams: msg.teams || [] })
           break
         case 'team_joined':
+          send({ type: 'get_teams' })
           if (msg.team_name === state.teamName) {
             dispatch({ type: 'SET_TEAM_MEMBERS', members: msg.usernames || [] })
           }
@@ -271,15 +273,19 @@ export default function Team() {
     }
   }, [state.screen, state.teamName, state.username, chosenAction, state.action, state.teamBuzzed, state.teamBuzzTime, state.roundStartTime, state.buzzerPosition])
 
-  const handleChoose = (action) => {
-    dispatch({ type: 'SET_SCREEN', screen: 'teamname' })
-    dispatch({ type: 'SET_TEAM_NAME', name: '' })
+  const handleJoinTeam = (teamName) => {
+    dispatch({ type: 'SET_TEAM_NAME', name: teamName })
+    setChosenAction('join')
     setJoinError('')
-    setTeamSearch('')
-    setChosenAction(action)
-    if (action === 'join') {
-      send({ type: 'get_teams' })
-    }
+    send({ type: 'join', team_name: teamName, action: 'join' })
+  }
+
+  const handleCreateTeam = () => {
+    const name = state.teamName.trim()
+    if (!name) return
+    setJoinError('')
+    setChosenAction('create')
+    send({ type: 'join', team_name: name, action: 'create' })
   }
 
   const handleJoin = () => {
@@ -304,6 +310,8 @@ export default function Team() {
   }
 
   const handleLeave = () => {
+    setConfirmLeave(false)
+    dispatch({ type: 'CLOSE_MENU' })
     send({ type: 'leave' })
     dispatch({ type: 'RESET_SESSION' })
     clearSession()
@@ -312,12 +320,15 @@ export default function Team() {
   const handleBack = () => {
     dispatch({ type: 'RESET_SESSION' })
     setJoinError('')
+    setCreatingTeam(false)
     clearSession()
   }
 
-  const filteredTeams = state.teamList.filter((t) =>
-    t.toLowerCase().includes(teamSearch.toLowerCase())
-  )
+  useEffect(() => {
+    if (state.screen === 'choose') {
+      send({ type: 'get_teams' })
+    }
+  }, [state.screen, send])
 
   useEffect(() => {
     if (!connected) return
@@ -373,9 +384,63 @@ export default function Team() {
         .team-title { font-size: 2rem; margin-bottom: 0.5rem; }
         .team-subtitle { font-size: 1.25rem; margin-bottom: 0.5rem; }
         .team-btn-big { padding: 1rem 2rem; font-size: 1.1rem; margin-bottom: 1rem; display: block; width: 250px; max-width: 80vw; margin-left: auto; margin-right: auto; }
+        .lobby { max-width: 400px; margin: 0 auto; }
+        .lobby-create-btn {
+          display: flex; align-items: center; justify-content: center; gap: 0.5rem;
+          width: 100%; padding: 0.75rem 1rem; margin-bottom: 1.5rem;
+          background: rgba(168, 139, 250, 0.15); border: 1px solid rgba(168, 139, 250, 0.3);
+          border-radius: 10px; color: #a78bfa; font-size: 0.95rem; font-weight: 600;
+          cursor: pointer; transition: all 0.2s;
+        }
+        .lobby-create-btn:hover { background: rgba(168, 139, 250, 0.25); border-color: rgba(168, 139, 250, 0.5); }
+        .lobby-create-form {
+          background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(148, 163, 184, 0.15);
+          border-radius: 10px; padding: 1rem; margin-bottom: 1.5rem;
+        }
+        .lobby-create-form input {
+          width: 100%; padding: 0.6rem 0.75rem; background: rgba(0,0,0,0.3);
+          border: 1px solid rgba(148, 163, 184, 0.2); border-radius: 6px;
+          color: #e2e8f0; font-size: 0.9rem; margin-bottom: 0.75rem; box-sizing: border-box;
+        }
+        .lobby-create-form input::placeholder { color: #64748b; }
+        .lobby-create-form input:focus { outline: none; border-color: rgba(168, 139, 250, 0.5); }
+        .lobby-create-actions { display: flex; gap: 0.5rem; }
+        .lobby-create-actions button { flex: 1; padding: 0.5rem; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 0.85rem; }
+        .lobby-create-actions .create-submit { background: #7c3aed; color: #fff; }
+        .lobby-create-actions .create-cancel { background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.5); }
+        .lobby-section-title {
+          font-size: 0.7rem; color: #64748b; text-transform: uppercase;
+          letter-spacing: 1px; margin-bottom: 0.5rem; font-weight: 700; text-align: left;
+        }
+        .lobby-team-list { text-align: left; }
+        .lobby-team-item {
+          display: flex; align-items: center; justify-content: space-between;
+          padding: 0.7rem 1rem; background: rgba(255,255,255,0.04);
+          border: 1px solid rgba(255,255,255,0.08); border-radius: 8px;
+          margin-bottom: 0.35rem; cursor: pointer; transition: all 0.15s;
+        }
+        .lobby-team-item:hover { background: rgba(168, 139, 250, 0.1); border-color: rgba(168, 139, 250, 0.25); }
+        .lobby-team-name { color: #e2e8f0; font-weight: 600; font-size: 0.9rem; }
+        .lobby-team-size { color: #94a3b8; font-size: 0.8rem; font-variant-numeric: tabular-nums; }
+        .lobby-team-full { color: #64748b; font-size: 0.75rem; }
+        .lobby-empty { color: #475569; font-size: 0.85rem; text-align: center; padding: 2rem 0; }
+        .confirm-overlay {
+          position: fixed; inset: 0; z-index: 20;
+          background: rgba(0,0,0,0.7); backdrop-filter: blur(4px);
+          display: flex; align-items: center; justify-content: center;
+        }
+        .confirm-dialog {
+          background: rgba(15, 23, 42, 0.95); border: 1px solid rgba(148, 163, 184, 0.15);
+          border-radius: 12px; padding: 1.5rem; width: 300px; max-width: 85vw; text-align: center;
+        }
+        .confirm-dialog p { color: #e2e8f0; margin: 0 0 1.25rem 0; font-size: 0.95rem; }
+        .confirm-actions { display: flex; gap: 0.5rem; }
+        .confirm-actions button { flex: 1; padding: 0.6rem; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 0.85rem; }
+        .confirm-yes { background: #dc2626; color: #fff; }
+        .confirm-no { background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.6); }
         .buzzer-bg {
           position: fixed; inset: 0;
-          background: #0a0a0a url('/bg.jpeg') center/cover no-repeat;
+          background: #0a0a0a url('/bg_2.png') center/cover no-repeat;
           z-index: 0;
           display: flex; align-items: center; justify-content: center;
           min-height: 100vh; min-height: 100dvh;
@@ -445,20 +510,6 @@ export default function Team() {
           font-size: 0.65rem; color: #64748b; text-transform: uppercase;
           letter-spacing: 1px; margin-bottom: 0.5rem; font-weight: 700;
         }
-        .leaderboard-item {
-          display: flex; align-items: center; gap: 0.6rem;
-          padding: 0.5rem 0.75rem; border-radius: 8px; margin-bottom: 0.25rem;
-          transition: background 0.15s;
-        }
-        .leaderboard-item.is-me { background: rgba(168, 139, 250, 0.15); border: 1px solid rgba(168, 139, 250, 0.25); }
-        .leaderboard-item:not(.is-me) { background: rgba(255,255,255,0.03); }
-        .lb-pos { font-size: 0.85rem; min-width: 2rem; text-align: center; color: #94a3b8; font-weight: 600; }
-        .lb-pos.top3 { font-size: 1.1rem; }
-        .lb-team { flex: 1; color: #e2e8f0; font-weight: 600; font-size: 0.85rem; }
-        .lb-team.is-me { color: #a78bfa; }
-        .lb-time { color: #94a3b8; font-family: monospace; font-size: 0.8rem; font-variant-numeric: tabular-nums; }
-        .lb-user { color: #64748b; font-size: 0.7rem; }
-        .lb-empty { color: #475569; font-size: 0.85rem; text-align: center; padding: 1.5rem 0; }
         .menu-member-item {
           padding: 0.35rem 0.75rem; color: rgba(255,255,255,0.7); font-size: 0.85rem;
           border-radius: 6px; margin-bottom: 0.15rem;
@@ -485,73 +536,47 @@ export default function Team() {
       `}</style>
 
       <div className={`team-root${state.screen === 'buzzer' ? ' buzzer-active' : ''}`}>
-        {/* Screen 1: Choose */}
+        {/* Screen 1: Lobby */}
         {state.screen === 'choose' && (
-          <>
+          <div className="lobby">
             <h1 className="team-title">TUNE TRACKER</h1>
-            <div style={{ marginTop: '2rem' }}>
-              <button className="team-btn-big" onClick={() => handleChoose('create')}>CREATE TEAM</button>
-              <button className="team-btn-big" onClick={() => handleChoose('join')}>JOIN TEAM</button>
-            </div>
-          </>
-        )}
 
-        {/* Screen 2: Team Name */}
-        {state.screen === 'teamname' && (
-          <>
-            <h1 className="team-title">TUNE TRACKER</h1>
-            {chosenAction === 'create' ? (
-              <>
-                <p>Enter Team Name</p>
+            {creatingTeam ? (
+              <div className="lobby-create-form">
                 <input type="text" placeholder="Team Name" value={state.teamName}
                   onChange={(e) => dispatch({ type: 'SET_TEAM_NAME', name: e.target.value })}
-                  onKeyDown={(e) => e.key === 'Enter' && handleJoin()} style={inputStyle} />
-              </>
-            ) : (
-              <>
-                <p>Select or search for a team to join</p>
-                <input type="text" placeholder="Search teams..." value={teamSearch}
-                  onChange={(e) => setTeamSearch(e.target.value)}
-                  style={{ ...inputStyle, marginBottom: '0.5rem' }} />
-                <div className="team-search-list">
-                  {filteredTeams.length === 0 ? (
-                    <p style={{ padding: '0.75rem', color: '#888', margin: 0 }}>
-                      {state.teamList.length === 0 ? 'No teams available' : 'No matching teams'}
-                    </p>
-                  ) : (
-                    filteredTeams.map((t) => (
-                      <div key={t} className="team-search-item"
-                        onClick={() => dispatch({ type: 'SET_TEAM_NAME', name: t })}
-                        style={{
-                          backgroundColor: state.teamName === t ? '#3b82f6' : 'transparent',
-                          color: state.teamName === t ? '#fff' : '#ccc',
-                        }}>
-                        {t}
-                      </div>
-                    ))
-                  )}
+                  onKeyDown={(e) => e.key === 'Enter' && handleCreateTeam()} autoFocus />
+                <div className="lobby-create-actions">
+                  <button className="create-submit" onClick={handleCreateTeam}>CREATE</button>
+                  <button className="create-cancel" onClick={() => { setCreatingTeam(false); dispatch({ type: 'SET_TEAM_NAME', name: '' }); setJoinError('') }}>BACK</button>
                 </div>
-                {state.teamName && (
-                  <p style={{ color: '#aaa', margin: '0 0 0.5rem 0' }}>Selected: <strong>{state.teamName}</strong></p>
-                )}
-                {!state.teamName && (
-                  <p style={{ color: '#888', margin: '0 0 0.5rem 0' }}>Or type a team name below</p>
-                )}
-                <input type="text" placeholder="Team Name" value={state.teamName}
-                  onChange={(e) => dispatch({ type: 'SET_TEAM_NAME', name: e.target.value })}
-                  onKeyDown={(e) => e.key === 'Enter' && handleJoin()} style={inputStyle} />
-              </>
+                {joinError && <p style={{ color: '#f87171', fontSize: '0.8rem', margin: '0.5rem 0 0 0' }}>{joinError}</p>}
+              </div>
+            ) : (
+              <button className="lobby-create-btn" onClick={() => { setCreatingTeam(true); setJoinError('') }}>
+                <span style={{ fontSize: '1.2rem' }}>+</span> CREATE TEAM
+              </button>
             )}
-            <br />
-            <button onClick={handleJoin} style={{ ...btnStyle, marginRight: '0.5rem' }}>
-              {chosenAction === 'create' ? 'CREATE' : 'JOIN'}
-            </button>
-            <button onClick={handleBack} style={btnStyle}>BACK</button>
-            {joinError && <p className="team-error">{joinError}</p>}
-          </>
+
+            <div className="lobby-section-title">TEAMS ({state.teamList.length})</div>
+            <div className="lobby-team-list">
+              {state.teamList.length === 0 ? (
+                <div className="lobby-empty">No teams yet</div>
+              ) : (
+                state.teamList.map((t) => (
+                  <div key={t.name} className="lobby-team-item" onClick={() => handleJoinTeam(t.name)}>
+                    <span className="lobby-team-name">{t.name}</span>
+                    <span className={t.size >= t.limit ? 'lobby-team-full' : 'lobby-team-size'}>
+                      {t.size}/{t.limit}{t.size >= t.limit ? ' (full)' : ''}
+                    </span>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
         )}
 
-        {/* Screen 3: Username */}
+        {/* Screen 2: Username */}
         {state.screen === 'username' && (
           <>
             <h2 className="team-subtitle">{state.teamName}</h2>
@@ -579,7 +604,11 @@ export default function Team() {
                 <span className={state.roundState === 'Active' ? 'info-active' : 'info-label'}>
                   {state.roundState === 'Active' ? '● Active' : '○ Inactive'}
                 </span>
-                <span className="info-label">Status: <span className={state.myStatus === 'Answering' ? 'info-active' : 'info-value'}>{state.myStatus}</span></span>
+                <span className="info-label">Status: <span style={{
+                  color: state.roundState !== 'Active' ? '#ef4444' :
+                         state.myStatus === 'Answered' ? '#22c55e' : '#eab308',
+                  fontWeight: 600
+                }}>{state.roundState !== 'Active' ? 'Not Started' : state.myStatus}</span></span>
                 {state.buzzerPosition !== null && (
                   <span className="info-label">Position: <span className="info-value">#{state.buzzerPosition}</span></span>
                 )}
@@ -635,7 +664,7 @@ export default function Team() {
 
                   {/* Leave Team */}
                   <div className="side-menu-section">
-                    <button className="menu-leave-btn" onClick={() => { dispatch({ type: 'CLOSE_MENU' }); handleLeave() }}>Leave Team</button>
+                    <button className="menu-leave-btn" onClick={() => { dispatch({ type: 'CLOSE_MENU' }); setConfirmLeave(true) }}>Leave Team</button>
                   </div>
                 </div>
               </div>
@@ -643,6 +672,17 @@ export default function Team() {
           </div>
         )}
       </div>
+      {confirmLeave && (
+        <div className="confirm-overlay" onClick={() => setConfirmLeave(false)}>
+          <div className="confirm-dialog" onClick={(e) => e.stopPropagation()}>
+            <p>Are you sure you want to leave the team?</p>
+            <div className="confirm-actions">
+              <button className="confirm-yes" onClick={handleLeave}>Leave</button>
+              <button className="confirm-no" onClick={() => setConfirmLeave(false)}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   )
 }

@@ -20,11 +20,13 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
 
     // Send team list on connect
     let teams = state.connected_teams.read().await;
-    let team_names: Vec<String> = teams.keys().cloned().collect();
+    let team_data: Vec<_> = teams.iter().map(|(name, members)| {
+        serde_json::json!({ "name": name, "size": members.len(), "limit": 4 })
+    }).collect();
     drop(teams);
     let _ = sender
         .send(Message::Text(
-            serde_json::json!({ "type": "team_list", "teams": team_names })
+            serde_json::json!({ "type": "team_list", "teams": team_data })
                 .to_string()
                 .into(),
         ))
@@ -135,9 +137,11 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
                     }
                     ClientMessage::GetTeams => {
                         let teams = state.connected_teams.read().await;
-                        let team_names: Vec<String> = teams.keys().cloned().collect();
+                        let team_data: Vec<_> = teams.iter().map(|(name, members)| {
+                            serde_json::json!({ "name": name, "size": members.len(), "limit": 4 })
+                        }).collect();
                         let _ = sender.send(Message::Text(
-                            serde_json::json!({ "type": "team_list", "teams": team_names }).to_string().into(),
+                            serde_json::json!({ "type": "team_list", "teams": team_data }).to_string().into(),
                         )).await;
                     }
                     ClientMessage::Buzz { reaction_time_ms } => {
