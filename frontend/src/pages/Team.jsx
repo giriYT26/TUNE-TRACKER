@@ -647,7 +647,7 @@ export default function Team() {
               )}
 
               <div className="lobby-section-title">TEAMS ({state.teamList.length})</div>
-              {state.teamList.length > 3 && (
+              {state.teamList.length > 0 && (
                 <input type="text" className="lobby-search" placeholder="Search teams..."
                   value={teamSearch} onChange={(e) => setTeamSearch(e.target.value)} />
               )}
