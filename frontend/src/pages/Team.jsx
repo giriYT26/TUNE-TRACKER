@@ -152,6 +152,16 @@ export default function Team() {
     return () => clearInterval(id)
   }, [state.roundState, state.reactionTime])
 
+  // Toggle buzzer-active class on html/body/#root for fullscreen bg
+  useEffect(() => {
+    const cls = 'buzzer-active'
+    const targets = [document.documentElement, document.body, document.getElementById('root')]
+    if (state.screen === 'buzzer') {
+      targets.forEach((el) => { if (el) el.classList.add(cls) })
+    }
+    return () => { targets.forEach((el) => { if (el) el.classList.remove(cls) }) }
+  }, [state.screen])
+
   const handleServerMessage = useCallback(
     (msg) => {
       switch (msg.type) {
@@ -323,15 +333,23 @@ export default function Team() {
     <>
       <style>{`
         .team-root { padding: 2rem; text-align: center; }
-        .team-root.buzzer-active { background: transparent; padding: 0; }
+        .team-root.buzzer-active { background: transparent; padding: 0; border: none; }
+        html.buzzer-active, body.buzzer-active, #root.buzzer-active {
+          background: #000 !important;
+          width: 100% !important;
+          max-width: 100% !important;
+          border: none !important;
+          margin: 0 !important;
+        }
         .team-title { font-size: 2rem; margin-bottom: 0.5rem; }
         .team-subtitle { font-size: 1.25rem; margin-bottom: 0.5rem; }
         .team-btn-big { padding: 1rem 2rem; font-size: 1.1rem; margin-bottom: 1rem; display: block; width: 250px; max-width: 80vw; margin-left: auto; margin-right: auto; }
         .buzzer-bg {
           position: fixed; inset: 0;
-          background: url('/bg.jpeg') center/cover no-repeat;
+          background: #0a0a0a url('/bg.jpeg') center/cover no-repeat;
           z-index: 0;
           display: flex; align-items: center; justify-content: center;
+          min-height: 100vh; min-height: 100dvh;
         }
         .buzzer-glass {
           position: relative; z-index: 1;
