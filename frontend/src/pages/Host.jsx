@@ -2,6 +2,14 @@ import { useReducer, useCallback, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useWebSocket } from '../hooks/useWebSocket'
 
+function formatReactionTime(ms) {
+  if (ms == null) return '--'
+  const min = Math.floor(ms / 60000)
+  const sec = Math.floor((ms % 60000) / 1000)
+  const msPart = ms % 1000
+  return `${min}:${String(sec).padStart(2, '0')}.${String(msPart).padStart(3, '0')}`
+}
+
 function hostReducer(state, action) {
   switch (action.type) {
     case 'BUZZER_UPDATE':
@@ -409,7 +417,7 @@ export default function Host() {
                   <tr>
                     <th style={styles.th}>#</th>
                     <th style={styles.th}>Team</th>
-                    <th style={styles.th}>Time</th>
+                    <th style={styles.th}>Reaction</th>
                     <th style={styles.th}>User</th>
                   </tr>
                 </thead>
@@ -420,7 +428,7 @@ export default function Host() {
                         {i < 3 ? medals[i] + ' ' : ''}#{event.position}
                       </td>
                       <td style={styles.td}>{event.team_name}</td>
-                      <td style={{ ...styles.td, color: '#94a3b8', fontVariantNumeric: 'tabular-nums' }}>{event.timestamp}</td>
+                      <td style={{ ...styles.td, color: '#94a3b8', fontVariantNumeric: 'tabular-nums' }}>{formatReactionTime(event.reaction_time_ms)}</td>
                       <td style={styles.td}>{event.username}</td>
                     </tr>
                   ))}

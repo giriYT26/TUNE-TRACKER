@@ -248,10 +248,11 @@ export default function Team() {
   }
 
   const handleBuzz = () => {
-    if (state.roundStartTime) {
-      dispatch({ type: 'SET_REACTION_TIME', time: Date.now() - state.roundStartTime })
+    const reactionTime = state.roundStartTime ? Date.now() - state.roundStartTime : null
+    if (reactionTime !== null) {
+      dispatch({ type: 'SET_REACTION_TIME', time: reactionTime })
     }
-    send({ type: 'buzz' })
+    send({ type: 'buzz', reaction_time_ms: reactionTime })
     dispatch({ type: 'SET_BUZZER_DISABLED', disabled: true })
   }
 
@@ -429,9 +430,41 @@ export default function Team() {
         {/* Screen 4: Buzzer */}
         {state.screen === 'buzzer' && (
           <>
-            <h2 className="team-subtitle">{state.teamName}</h2>
+            <h2 className="team-title">{state.teamName}</h2>
 
-            {/* Team Members */}
+            <div style={{ display: 'flex', justifyContent: 'center', gap: '2rem', flexWrap: 'wrap', marginBottom: '0.75rem' }}>
+              <span style={{ color: '#94a3b8', fontSize: '0.95rem' }}>Round: <strong style={{ color: '#e2e8f0' }}>{state.roundName}</strong></span>
+              <span style={{ color: state.roundState === 'Active' ? '#22c55e' : '#94a3b8', fontSize: '0.95rem' }}>
+                {state.roundState === 'Active' ? '● Active' : '○ Inactive'}
+              </span>
+              <span style={{ color: '#94a3b8', fontSize: '0.95rem' }}>Status: <strong style={{ color: state.myStatus === 'Answering' ? '#22c55e' : '#e2e8f0' }}>{state.myStatus}</strong></span>
+              {state.buzzerPosition !== null && (
+                <span style={{ color: '#94a3b8', fontSize: '0.95rem' }}>Position: <strong style={{ color: '#e2e8f0' }}>#{state.buzzerPosition}</strong></span>
+              )}
+            </div>
+
+            {/* Reaction Timer */}
+            <div className={`reaction-timer${state.reactionTime !== null ? ' frozen' : ''}`}>
+              {state.reactionTime !== null
+                ? formatReactionTime(state.reactionTime)
+                : '0:00.000'}
+            </div>
+
+            <div style={{ margin: '1.5rem 0' }}>
+              <button
+                className="buzz-btn"
+                onClick={handleBuzz}
+                disabled={state.buzzerDisabled || state.roundState !== 'Active'}
+                style={{
+                  backgroundColor: state.buzzerDisabled || state.roundState !== 'Active' ? '#888' : '#ef4444',
+                }}
+              >
+                BUZZ
+              </button>
+            </div>
+
+            {state.buzzerDisabled && <p style={{ color: '#22c55e', fontWeight: 'bold', margin: '0.5rem 0' }}>✓ BUZZER REGISTERED</p>}
+
             {state.teamMembers.length > 0 && (
               <div className="member-list">
                 <div className="member-list-title">Team ({state.teamMembers.length}/4)</div>
@@ -443,31 +476,6 @@ export default function Team() {
               </div>
             )}
 
-            <p>Round: {state.roundName}</p>
-            <p style={{ color: state.roundState === 'Active' ? 'green' : '#888' }}>
-              {state.roundState === 'Active' ? '🟢 Buzzer Active' : '⏸ Buzzer Inactive'}
-            </p>
-
-            {/* Reaction Timer */}
-            <div className={`reaction-timer${state.reactionTime !== null ? ' frozen' : ''}`}>
-              {state.reactionTime !== null
-                ? formatReactionTime(state.reactionTime)
-                : '0:00.000'}
-            </div>
-
-            <p>Status: {state.myStatus}</p>
-            {state.buzzerPosition !== null && <p>Position: #{state.buzzerPosition}</p>}
-            <button
-              className="buzz-btn"
-              onClick={handleBuzz}
-              disabled={state.buzzerDisabled || state.roundState !== 'Active'}
-              style={{
-                backgroundColor: state.buzzerDisabled || state.roundState !== 'Active' ? '#888' : '#ef4444',
-              }}
-            >
-              BUZZ
-            </button>
-            {state.buzzerDisabled && <p style={{ color: 'green', fontWeight: 'bold' }}>✓ BUZZER REGISTERED</p>}
             <button className="leave-btn" onClick={handleLeave}>LEAVE TEAM</button>
           </>
         )}

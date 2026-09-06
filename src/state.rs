@@ -17,7 +17,7 @@ pub struct BuzzerEvent {
     pub team_name: String,
     pub username: String,
     pub position: usize,
-    pub timestamp: String,
+    pub reaction_time_ms: Option<u64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -53,7 +53,7 @@ pub enum ClientMessage {
     Join { team_name: String, action: String },
     Username { username: String },
     GetTeams,
-    Buzz,
+    Buzz { reaction_time_ms: Option<u64> },
     Violation { kind: String },
     Start,
     Lock,
@@ -137,7 +137,7 @@ impl AppState {
         Ok(())
     }
 
-    pub async fn add_buzzer_event(&self, username: String) -> Option<BuzzerEvent> {
+    pub async fn add_buzzer_event(&self, username: String, reaction_time_ms: Option<u64>) -> Option<BuzzerEvent> {
         let mut round = self.current_round.write().await;
         if round.state != RoundState::Active {
             return None;
@@ -153,7 +153,7 @@ impl AppState {
             team_name,
             username,
             position,
-            timestamp: chrono::Utc::now().format("%H:%M:%S%.3f").to_string(),
+            reaction_time_ms,
         };
         round.buzzer_order.push(event.clone());
 

@@ -126,9 +126,9 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
                             serde_json::json!({ "type": "team_list", "teams": team_names }).to_string().into(),
                         )).await;
                     }
-                    ClientMessage::Buzz => {
+                    ClientMessage::Buzz { reaction_time_ms } => {
                         if let Some(ref uname) = username {
-                            state.add_buzzer_event(uname.clone()).await;
+                            state.add_buzzer_event(uname.clone(), reaction_time_ms).await;
                         }
                     }
                     ClientMessage::Violation { kind } => {
