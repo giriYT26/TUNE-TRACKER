@@ -323,36 +323,72 @@ export default function Team() {
     <>
       <style>{`
         .team-root { padding: 2rem; text-align: center; }
+        .team-root.buzzer-active { background: transparent; padding: 0; }
         .team-title { font-size: 2rem; margin-bottom: 0.5rem; }
         .team-subtitle { font-size: 1.25rem; margin-bottom: 0.5rem; }
         .team-btn-big { padding: 1rem 2rem; font-size: 1.1rem; margin-bottom: 1rem; display: block; width: 250px; max-width: 80vw; margin-left: auto; margin-right: auto; }
-        .buzz-btn { font-size: 2rem; padding: 1rem 3rem; border: none; border-radius: 8px; color: #fff; }
-        .buzz-btn:disabled { cursor: not-allowed; opacity: 0.5; background-color: #888 !important; }
-        .buzz-btn:not(:disabled) { cursor: pointer; background-color: #ef4444; }
+        .buzzer-bg {
+          position: fixed; inset: 0;
+          background: url('/bg.jpeg') center/cover no-repeat;
+          z-index: 0;
+          display: flex; align-items: center; justify-content: center;
+        }
+        .buzzer-glass {
+          position: relative; z-index: 1;
+          width: 90%; max-width: 420px;
+          padding: 2rem 1.5rem;
+          background: rgba(15, 23, 42, 0.55);
+          backdrop-filter: blur(20px);
+          -webkit-backdrop-filter: blur(20px);
+          border: 1px solid rgba(148, 163, 184, 0.15);
+          border-radius: 16px;
+          box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+          text-align: center;
+        }
+        .buzzer-glass .team-title { color: #f1f5f9; text-shadow: 0 0 20px rgba(168,85,247,0.4); }
+        .buzzer-glass .info-row { display: flex; justify-content: center; gap: 1.5rem; flex-wrap: wrap; margin-bottom: 0.75rem; font-size: 0.85rem; }
+        .buzzer-glass .info-label { color: #94a3b8; }
+        .buzzer-glass .info-value { color: #e2e8f0; font-weight: 600; }
+        .buzzer-glass .info-active { color: #22c55e; }
+        .reaction-timer { font-size: 2rem; font-family: monospace; font-variant-numeric: tabular-nums; color: rgba(255,255,255,0.7); margin: 1rem 0; text-shadow: 0 0 12px rgba(168,85,247,0.3); }
+        .reaction-timer.frozen { color: #22c55e; font-weight: bold; text-shadow: 0 0 16px rgba(34,197,94,0.5); }
+        .buzz-btn { font-size: 2rem; padding: 1rem 3rem; border: none; border-radius: 12px; color: #fff; }
+        .buzz-btn:disabled { cursor: not-allowed; opacity: 0.4; background-color: rgba(100,116,139,0.6) !important; }
+        .buzz-btn:not(:disabled) { cursor: pointer; background: linear-gradient(135deg, #ef4444, #dc2626); box-shadow: 0 4px 20px rgba(239,68,68,0.4); }
         .buzz-btn:not(:disabled):active { transform: scale(0.95); }
-        .team-search-list { max-height: 200px; overflow-y: auto; border: 1px solid #555; border-radius: 4px; margin-bottom: 0.75rem; width: 250px; max-width: 80vw; margin-left: auto; margin-right: auto; }
-        .team-search-item { padding: 0.5rem 0.75rem; cursor: pointer; border-bottom: 1px solid #444; }
-        .team-error { color: red; margin-top: 0.5rem; }
-        .leave-btn { padding: 0.4rem 1rem; font-size: 0.85rem; background: transparent; color: #94a3b8; border: 1px solid #475569; border-radius: 6px; cursor: pointer; margin-top: 1rem; }
-        .leave-btn:hover { color: #ef4444; border-color: #ef4444; }
-        .member-list { display: inline-block; text-align: left; background: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 0.5rem 1rem; margin: 0.5rem auto; min-width: 160px; }
-        .member-list-title { font-size: 0.75rem; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.35rem; text-align: center; }
-        .member-item { padding: 0.2rem 0; color: #cbd5e1; font-size: 0.9rem; }
-        .member-item-you { color: #3b82f6; font-weight: 600; }
-        .reaction-timer { font-size: 1.5rem; font-family: monospace; font-variant-numeric: tabular-nums; color: #94a3b8; margin: 0.5rem 0; }
-        .reaction-timer.frozen { color: #22c55e; font-weight: bold; }
+        .buzzer-glass .member-list {
+          display: inline-block; text-align: left;
+          background: rgba(15, 23, 42, 0.5);
+          backdrop-filter: blur(8px);
+          -webkit-backdrop-filter: blur(8px);
+          border: 1px solid rgba(148, 163, 184, 0.12);
+          border-radius: 10px; padding: 0.5rem 1rem; margin: 0.75rem auto; min-width: 160px;
+        }
+        .member-list-title { font-size: 0.7rem; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.35rem; text-align: center; }
+        .member-item { padding: 0.2rem 0; color: rgba(255,255,255,0.7); font-size: 0.85rem; }
+        .member-item-you { color: #a78bfa; font-weight: 600; }
+        .buzzer-glass .leave-btn {
+          padding: 0.4rem 1rem; font-size: 0.8rem;
+          background: transparent; color: rgba(255,255,255,0.4);
+          border: 1px solid rgba(255,255,255,0.15); border-radius: 6px;
+          cursor: pointer; margin-top: 0.75rem;
+        }
+        .buzzer-glass .leave-btn:hover { color: #ef4444; border-color: #ef4444; }
+        .buzzer-glass .buzzer-msg { color: #22c55e; font-weight: bold; margin: 0.5rem 0; font-size: 0.9rem; }
         @media (max-width: 480px) {
           .team-root { padding: 1rem; }
           .team-title { font-size: 1.5rem; }
           .team-subtitle { font-size: 1rem; }
+          .buzzer-glass { padding: 1.5rem 1rem; }
+          .buzzer-glass .info-row { gap: 0.75rem; font-size: 0.8rem; }
           .buzz-btn { font-size: 1.5rem; padding: 0.8rem 2rem; }
           .team-btn-big { padding: 0.8rem 1.5rem; font-size: 1rem; width: 200px; }
-          .reaction-timer { font-size: 1.2rem; }
+          .reaction-timer { font-size: 1.5rem; }
           .member-list { min-width: 140px; padding: 0.4rem 0.75rem; }
         }
       `}</style>
 
-      <div className="team-root">
+      <div className={`team-root${state.screen === 'buzzer' ? ' buzzer-active' : ''}`}>
         {/* Screen 1: Choose */}
         {state.screen === 'choose' && (
           <>
@@ -437,57 +473,60 @@ export default function Team() {
 
         {/* Screen 4: Buzzer */}
         {state.screen === 'buzzer' && (
-          <>
-            <h2 className="team-title">{state.teamName}</h2>
+          <div className="buzzer-bg">
+            <div className="buzzer-glass">
+              <h2 className="team-title">{state.teamName}</h2>
 
-            <div style={{ display: 'flex', justifyContent: 'center', gap: '2rem', flexWrap: 'wrap', marginBottom: '0.75rem' }}>
-              <span style={{ color: '#94a3b8', fontSize: '0.95rem' }}>Round: <strong style={{ color: '#e2e8f0' }}>{state.roundName}</strong></span>
-              <span style={{ color: state.roundState === 'Active' ? '#22c55e' : '#94a3b8', fontSize: '0.95rem' }}>
-                {state.roundState === 'Active' ? '● Active' : '○ Inactive'}
-              </span>
-              <span style={{ color: '#94a3b8', fontSize: '0.95rem' }}>Status: <strong style={{ color: state.myStatus === 'Answering' ? '#22c55e' : '#e2e8f0' }}>{state.myStatus}</strong></span>
-              {state.buzzerPosition !== null && (
-                <span style={{ color: '#94a3b8', fontSize: '0.95rem' }}>Position: <strong style={{ color: '#e2e8f0' }}>#{state.buzzerPosition}</strong></span>
-              )}
-            </div>
-
-            {/* Reaction Timer */}
-            <div className={`reaction-timer${state.reactionTime !== null ? ' frozen' : ''}`}>
-              {state.reactionTime !== null
-                ? formatReactionTime(state.reactionTime)
-                : state.roundStartTime
-                  ? formatReactionTime(Date.now() - state.roundStartTime)
-                  : '0:00.000'}
-            </div>
-
-            <div style={{ margin: '1.5rem 0' }}>
-              <button
-                className="buzz-btn"
-                onClick={handleBuzz}
-                disabled={state.buzzerDisabled || state.roundState !== 'Active'}
-                style={{
-                  backgroundColor: state.buzzerDisabled || state.roundState !== 'Active' ? '#888' : '#ef4444',
-                }}
-              >
-                BUZZ
-              </button>
-            </div>
-
-            {state.buzzerDisabled && <p style={{ color: '#22c55e', fontWeight: 'bold', margin: '0.5rem 0' }}>✓ BUZZER REGISTERED</p>}
-
-            {state.teamMembers.length > 0 && (
-              <div className="member-list">
-                <div className="member-list-title">Team ({state.teamMembers.length}/4)</div>
-                {state.teamMembers.map((m) => (
-                  <div key={m} className={`member-item${m === state.username ? ' member-item-you' : ''}`}>
-                    {m === state.username ? `${m} (you)` : m}
-                  </div>
-                ))}
+              <div className="info-row">
+                <span className="info-label">Round: <span className="info-value">{state.roundName}</span></span>
+                <span className={state.roundState === 'Active' ? 'info-active' : 'info-label'}>
+                  {state.roundState === 'Active' ? '● Active' : '○ Inactive'}
+                </span>
+                <span className="info-label">Status: <span className={state.myStatus === 'Answering' ? 'info-active' : 'info-value'}>{state.myStatus}</span></span>
+                {state.buzzerPosition !== null && (
+                  <span className="info-label">Position: <span className="info-value">#{state.buzzerPosition}</span></span>
+                )}
               </div>
-            )}
 
-            <button className="leave-btn" onClick={handleLeave}>LEAVE TEAM</button>
-          </>
+              {/* Reaction Timer */}
+              <div className={`reaction-timer${state.reactionTime !== null ? ' frozen' : ''}`}>
+                {state.reactionTime !== null
+                  ? formatReactionTime(state.reactionTime)
+                  : state.roundStartTime
+                    ? formatReactionTime(Date.now() - state.roundStartTime)
+                    : '0:00.000'}
+              </div>
+
+              <div style={{ margin: '1.5rem 0' }}>
+                <button
+                  className="buzz-btn"
+                  onClick={handleBuzz}
+                  disabled={state.buzzerDisabled || state.roundState !== 'Active'}
+                  style={{
+                    backgroundColor: state.buzzerDisabled || state.roundState !== 'Active' ? 'rgba(100,116,139,0.6)' : undefined,
+                  }}
+                >
+                  BUZZ
+                </button>
+              </div>
+
+              {state.buzzerDisabled && <p className="buzzer-msg">✓ BUZZER REGISTERED</p>}
+
+              {state.teamMembers.length > 0 && (
+                <div className="member-list">
+                  <div className="member-list-title">Team ({state.teamMembers.length}/4)</div>
+                  {state.teamMembers.map((m) => (
+                    <div key={m} className={`member-item${m === state.username ? ' member-item-you' : ''}`}>
+                      {m === state.username ? `${m} (you)` : m}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <br />
+              <button className="leave-btn" onClick={handleLeave}>LEAVE TEAM</button>
+            </div>
+          </div>
         )}
       </div>
     </>
