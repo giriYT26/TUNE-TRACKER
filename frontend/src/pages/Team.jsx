@@ -1,25 +1,7 @@
 import { useState, useEffect, useReducer, useCallback } from 'react'
 import { useWebSocket } from '../hooks/useWebSocket'
-import type { BuzzerEvent } from '../hooks/useWebSocket'
 
-type TeamState = {
-  joined: boolean
-  myStatus: string
-  buzzerDisabled: boolean
-  buzzerPosition: number | null
-  roundState: string
-}
-
-type TeamAction =
-  | { type: 'SET_JOINED'; joined: boolean }
-  | { type: 'SET_STATUS'; status: string }
-  | { type: 'SET_BUZZER_DISABLED'; disabled: boolean }
-  | { type: 'SET_BUZZER_POSITION'; position: number | null }
-  | { type: 'SET_ROUND_STATE'; state: string }
-  | { type: 'BUZZER_UPDATE'; buzzerOrder: BuzzerEvent[]; teamName: string }
-  | { type: 'ROUND_STATE_CHANGE'; state: string }
-
-function teamReducer(state: TeamState, action: TeamAction): TeamState {
+function teamReducer(state, action) {
   switch (action.type) {
     case 'SET_JOINED':
       return { ...state, joined: action.joined }
@@ -33,7 +15,7 @@ function teamReducer(state: TeamState, action: TeamAction): TeamState {
       return { ...state, roundState: action.state }
     case 'BUZZER_UPDATE': {
       const myEvent = action.buzzerOrder.find(
-        (e: BuzzerEvent) => e.team_name === action.teamName
+        (e) => e.team_name === action.teamName
       )
       return {
         ...state,
@@ -65,27 +47,25 @@ export default function Team() {
   })
 
   const handleServerMessage = useCallback(
-    (msg: unknown) => {
-      const data = msg as { type: string; [key: string]: unknown }
-      switch (data.type) {
+    (msg) => {
+      switch (msg.type) {
         case 'buzzer_update':
           dispatch({
             type: 'BUZZER_UPDATE',
-            buzzerOrder: data.buzzer_order as BuzzerEvent[],
+            buzzerOrder: msg.buzzer_order,
             teamName,
           })
           break
         case 'round_state': {
-          const roundState = data.state as string
-          dispatch({ type: 'ROUND_STATE_CHANGE', state: roundState })
-          if (roundState === 'Active') {
+          dispatch({ type: 'ROUND_STATE_CHANGE', state: msg.state })
+          if (msg.state === 'Active') {
             dispatch({ type: 'SET_JOINED', joined: true })
           }
           break
         }
         case 'team_status':
-          if ((data.team_name as string) === teamName) {
-            dispatch({ type: 'SET_STATUS', status: data.status as string })
+          if (msg.team_name === teamName) {
+            dispatch({ type: 'SET_STATUS', status: msg.status })
           }
           break
       }
@@ -110,7 +90,7 @@ export default function Team() {
   useEffect(() => {
     if (!connected) return
 
-    const reportViolation = (kind: string) => {
+    const reportViolation = (kind) => {
       send({ type: 'violation', kind })
     }
 

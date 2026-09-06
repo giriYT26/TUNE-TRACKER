@@ -1,16 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 
-export interface BuzzerEvent {
-  position: number
-  team_name: string
-  timestamp: string
-}
-
-export function useWebSocket(
-  path: string,
-  onMessage?: (data: unknown) => void
-) {
-  const socketRef = useRef<WebSocket | null>(null)
+export function useWebSocket(path, onMessage) {
+  const socketRef = useRef(null)
   const [connected, setConnected] = useState(false)
 
   useEffect(() => {
@@ -36,7 +27,7 @@ export function useWebSocket(
     }
   }, [path, onMessage])
 
-  const send = useCallback((msg: unknown) => {
+  const send = useCallback((msg) => {
     if (socketRef.current?.readyState === WebSocket.OPEN) {
       socketRef.current.send(JSON.stringify(msg))
     }
