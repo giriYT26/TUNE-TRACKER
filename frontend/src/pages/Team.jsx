@@ -3,8 +3,14 @@ import { useWebSocket } from '../hooks/useWebSocket'
 
 function teamReducer(state, action) {
   switch (action.type) {
-    case 'SET_JOINED':
-      return { ...state, joined: action.joined }
+    case 'SET_SCREEN':
+      return { ...state, screen: action.screen }
+    case 'SET_TEAM_NAME':
+      return { ...state, teamName: action.name }
+    case 'SET_USERNAME':
+      return { ...state, username: action.name }
+    case 'SET_ROUND_NAME':
+      return { ...state, roundName: action.name }
     case 'SET_STATUS':
       return { ...state, myStatus: action.status }
     case 'SET_BUZZER_DISABLED':
@@ -15,7 +21,7 @@ function teamReducer(state, action) {
       return { ...state, roundState: action.state }
     case 'BUZZER_UPDATE': {
       const myEvent = action.buzzerOrder.find(
-        (e) => e.team_name === action.teamName
+        (e) => e.username === state.username
       )
       return {
         ...state,
@@ -31,15 +37,19 @@ function teamReducer(state, action) {
         buzzerPosition: action.state === 'Active' ? null : state.buzzerPosition,
         myStatus: action.state === 'Active' ? 'Waiting' : state.myStatus,
       }
+    default:
+      return state
   }
 }
 
 export default function Team() {
-  const [teamName, setTeamName] = useState('')
   const [joinError, setJoinError] = useState('')
 
   const [state, dispatch] = useReducer(teamReducer, {
-    joined: false,
+    screen: 'join',
+    teamName: '',
+    username: '',
+    roundName: 'Round 1',
     myStatus: 'Waiting',
     buzzerDisabled: false,
     buzzerPosition: null,
@@ -49,37 +59,54 @@ export default function Team() {
   const handleServerMessage = useCallback(
     (msg) => {
       switch (msg.type) {
+        case 'joined':
+          dispatch({ type: 'SET_SCREEN', screen: 'username' })
+          setJoinError('')
+          break
+        case 'username_accepted':
+          dispatch({ type: 'SET_ROUND_NAME', name: msg.round_name || 'Round 1' })
+          dispatch({ type: 'SET_SCREEN', screen: 'buzzer' })
+          setJoinError('')
+          break
+        case 'error':
+          setJoinError(msg.message)
+          break
         case 'buzzer_update':
           dispatch({
             type: 'BUZZER_UPDATE',
             buzzerOrder: msg.buzzer_order,
-            teamName,
           })
           break
-        case 'round_state': {
+        case 'round_state':
           dispatch({ type: 'ROUND_STATE_CHANGE', state: msg.state })
-          if (msg.state === 'Active') {
-            dispatch({ type: 'SET_JOINED', joined: true })
-          }
           break
-        }
+        case 'round_name':
+          dispatch({ type: 'SET_ROUND_NAME', name: msg.name })
+          break
         case 'team_status':
-          if (msg.team_name === teamName) {
+          if (msg.username === state.username) {
             dispatch({ type: 'SET_STATUS', status: msg.status })
           }
           break
       }
     },
-    [teamName]
+    [state.username]
   )
 
   const { connected, send } = useWebSocket('/ws/team', handleServerMessage)
 
   const handleJoin = () => {
-    const name = teamName.trim()
+    const name = state.teamName.trim()
     if (!name) return
     setJoinError('')
     send({ type: 'join', team_name: name })
+  }
+
+  const handleSubmitUsername = () => {
+    const name = state.username.trim()
+    if (!name) return
+    setJoinError('')
+    send({ type: 'username', username: name })
   }
 
   const handleBuzz = () => {
@@ -101,19 +128,30 @@ export default function Team() {
     const handleFullscreen = () => {
       if (!document.fullscreenElement) reportViolation('fullscreen_exit')
     }
+    const handleBeforeUnload = () => {
+      reportViolation('page_close')
+    }
+    const handlePopState = () => {
+      reportViolation('navigation')
+    }
 
     document.addEventListener('visibilitychange', handleVisibility)
     window.addEventListener('blur', handleBlur)
     document.addEventListener('fullscreenchange', handleFullscreen)
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    window.addEventListener('popstate', handlePopState)
 
     return () => {
       document.removeEventListener('visibilitychange', handleVisibility)
       window.removeEventListener('blur', handleBlur)
       document.removeEventListener('fullscreenchange', handleFullscreen)
+      window.removeEventListener('beforeunload', handleBeforeUnload)
+      window.removeEventListener('popstate', handlePopState)
     }
   }, [connected, send])
 
-  if (!state.joined) {
+  // Screen 1: Join
+  if (state.screen === 'join') {
     return (
       <div style={{ padding: '2rem', textAlign: 'center' }}>
         <h1>TUNE TRACKER</h1>
@@ -121,11 +159,13 @@ export default function Team() {
         <input
           type="text"
           placeholder="Team Name"
-          value={teamName}
-          onChange={(e) => setTeamName(e.target.value)}
+          value={state.teamName}
+          onChange={(e) => dispatch({ type: 'SET_TEAM_NAME', name: e.target.value })}
           onKeyDown={(e) => e.key === 'Enter' && handleJoin()}
+          style={{ padding: '0.5rem', width: '200px', marginBottom: '1rem' }}
         />
-        <button onClick={handleJoin}>JOIN EVENT</button>
+        <br />
+        <button onClick={handleJoin} style={{ padding: '0.5rem 1.5rem' }}>JOIN EVENT</button>
         {joinError && <p style={{ color: 'red' }}>{joinError}</p>}
         <p style={{ color: connected ? 'green' : 'red' }}>
           {connected ? 'Connected' : 'Disconnected'}
@@ -134,28 +174,60 @@ export default function Team() {
     )
   }
 
+  // Screen 2: Username
+  if (state.screen === 'username') {
+    return (
+      <div style={{ padding: '2rem', textAlign: 'center' }}>
+        <h2>{state.teamName}</h2>
+        <p>Enter Username</p>
+        <input
+          type="text"
+          placeholder="Username"
+          value={state.username}
+          onChange={(e) => dispatch({ type: 'SET_USERNAME', name: e.target.value })}
+          onKeyDown={(e) => e.key === 'Enter' && handleSubmitUsername()}
+          style={{ padding: '0.5rem', width: '200px', marginBottom: '1rem' }}
+        />
+        <br />
+        <button onClick={handleSubmitUsername} style={{ padding: '0.5rem 1.5rem' }}>SUBMIT</button>
+        {joinError && <p style={{ color: 'red' }}>{joinError}</p>}
+        <p style={{ color: connected ? 'green' : 'red' }}>
+          {connected ? 'Connected' : 'Disconnected'}
+        </p>
+      </div>
+    )
+  }
+
+  // Screen 3: Buzzer
   return (
     <div style={{ padding: '2rem', textAlign: 'center' }}>
-      <h2>{teamName}</h2>
-      <p>Round: {state.roundState}</p>
-      <p>Status: {state.myStatus}</p>
-      {state.buzzerPosition !== null && <p>Position: #{state.buzzerPosition}</p>}
+      <h2>{state.teamName}</h2>
+      <p>Round: {state.roundName}</p>
+      <p style={{ color: state.roundState === 'Active' ? 'green' : '#888' }}>
+        {state.roundState === 'Active' ? '🟢 Buzzer Active' : '⏸ Buzzer Inactive'}
+      </p>
       <p style={{ color: connected ? 'green' : 'red' }}>
         {connected ? 'Connected' : 'Disconnected'}
       </p>
+      <p>Status: {state.myStatus}</p>
+      {state.buzzerPosition !== null && <p>Position: #{state.buzzerPosition}</p>}
       <button
         onClick={handleBuzz}
         disabled={state.buzzerDisabled || state.roundState !== 'Active'}
         style={{
           fontSize: '2rem',
           padding: '1rem 3rem',
+          backgroundColor: state.buzzerDisabled || state.roundState !== 'Active' ? '#888' : '#ef4444',
+          color: '#fff',
+          border: 'none',
+          borderRadius: '8px',
           cursor: state.buzzerDisabled || state.roundState !== 'Active' ? 'not-allowed' : 'pointer',
           opacity: state.buzzerDisabled || state.roundState !== 'Active' ? 0.5 : 1,
         }}
       >
         BUZZ
       </button>
-      {state.buzzerDisabled && <p>BUZZER REGISTERED</p>}
+      {state.buzzerDisabled && <p style={{ color: 'green', fontWeight: 'bold' }}>✓ BUZZER REGISTERED</p>}
     </div>
   )
 }
