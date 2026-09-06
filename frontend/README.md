@@ -1,32 +1,82 @@
-# React + TypeScript + Vite
+# Tune Tracker — Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+React frontend for the Tune Tracker buzzer system.
 
-Currently, two official plugins are available:
+## Tech Stack
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+- **React 19** — UI framework
+- **Vite 8** — dev server & build tool
+- **React Router 7** — page routing
+- **JavaScript (JSX)** — no TypeScript
 
-## React Compiler
+## Pages
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+| Route | Page | Description |
+|-------|------|-------------|
+| `/` | Home | Navigation links |
+| `/team` | Team | Join event, press buzzer, anti-cheat |
+| `/host` | Host | Dashboard with controls, buzzer order, team list |
 
-## Expanding the Oxlint configuration
+## Getting Started
 
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
+### Prerequisites
 
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+- Node.js 18+
+- Backend running on `localhost:3000`
+
+### Install dependencies
+
+```bash
+npm install
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+### Run dev server
+
+```bash
+npm run dev
+```
+
+Opens at `http://localhost:5173`
+
+The Vite proxy forwards `/ws/*` requests to the backend at `localhost:3000`.
+
+### Build for production
+
+```bash
+npm run build
+```
+
+Output goes to `dist/`.
+
+### Lint
+
+```bash
+npm run lint
+```
+
+## WebSocket Protocol
+
+The frontend connects to two WebSocket endpoints:
+
+- **Team:** `ws://localhost:5173/ws/team`
+- **Host:** `ws://localhost:5173/ws/host`
+
+### Messages sent to server
+
+```json
+{ "type": "join", "team_name": "Team Vibe" }
+{ "type": "buzz" }
+{ "type": "violation", "kind": "tab_switch" }
+{ "type": "start" }
+{ "type": "lock" }
+{ "type": "reset" }
+{ "type": "next_question" }
+```
+
+### Messages received from server
+
+```json
+{ "type": "buzzer_update", "buzzer_order": [...] }
+{ "type": "round_state", "state": "Active" }
+{ "type": "team_status", "team_name": "Team Vibe", "status": "Disqualified" }
+```
