@@ -44,6 +44,8 @@ function teamReducer(state, action) {
       return { ...state, roundName: action.name }
     case 'SET_STATUS':
       return { ...state, myStatus: action.status }
+    case 'ELIMINATED':
+      return { ...state, screen: 'eliminated' }
     case 'SET_BUZZER_DISABLED':
       return { ...state, buzzerDisabled: action.disabled }
     case 'SET_BUZZER_POSITION':
@@ -240,7 +242,12 @@ export default function Team() {
           break
         case 'team_status':
           if (msg.username === state.username) {
-            dispatch({ type: 'SET_STATUS', status: msg.status })
+            if (msg.status === 'Disqualified') {
+              dispatch({ type: 'ELIMINATED' })
+              clearSession()
+            } else {
+              dispatch({ type: 'SET_STATUS', status: msg.status })
+            }
           }
           break
         case 'team_lock':
@@ -590,6 +597,40 @@ export default function Team() {
           cursor: pointer; font-size: 0.85rem; transition: all 0.2s;
         }
         .menu-leave-btn:hover { color: #ef4444; border-color: #ef4444; background: rgba(239,68,68,0.08); }
+        .eliminated-bg {
+          position: fixed; inset: 0;
+          background: #0a0a0a;
+          z-index: 0;
+          display: flex; align-items: center; justify-content: center;
+          min-height: 100vh; min-height: 100dvh;
+        }
+        .eliminated-glass {
+          position: relative; z-index: 1;
+          width: 90%; max-width: 420px;
+          padding: 2.5rem 1.5rem;
+          background: rgba(127, 29, 29, 0.4);
+          backdrop-filter: blur(20px);
+          -webkit-backdrop-filter: blur(20px);
+          border: 1px solid rgba(239, 68, 68, 0.3);
+          border-radius: 16px;
+          box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+          text-align: center;
+        }
+        .eliminated-glass .elim-icon { font-size: 4rem; margin-bottom: 0.75rem; }
+        .eliminated-glass .elim-title {
+          color: #f87171; font-size: 1.8rem; font-weight: 800;
+          text-shadow: 0 0 20px rgba(239,68,68,0.5); margin: 0 0 0.5rem 0;
+        }
+        .eliminated-glass .elim-sub {
+          color: #fca5a5; font-size: 0.95rem; margin: 0 0 2rem 0;
+        }
+        .eliminated-glass .elim-btn {
+          padding: 0.75rem 2rem; background: rgba(239,68,68,0.2);
+          border: 1px solid rgba(239,68,68,0.4); border-radius: 8px;
+          color: #fca5a5; font-size: 0.9rem; font-weight: 600;
+          cursor: pointer; transition: all 0.2s;
+        }
+        .eliminated-glass .elim-btn:hover { background: rgba(239,68,68,0.3); color: #fff; }
         @media (max-width: 480px) {
           .team-root { padding: 1rem; }
           .team-title { font-size: 1.5rem; }
@@ -766,6 +807,21 @@ export default function Team() {
                 </div>
               </div>
             )}
+          </div>
+        )}
+
+        {/* Screen 3: Eliminated */}
+        {state.screen === 'eliminated' && (
+          <div className="eliminated-bg">
+            <div className="eliminated-glass">
+              <div className="elim-icon">💀</div>
+              <h2 className="elim-title">YOU GOT ELIMINATED!</h2>
+              <p className="elim-sub">You can no longer participate in this round.</p>
+              <button className="elim-btn" onClick={() => {
+                dispatch({ type: 'RESET_SESSION' })
+                clearSession()
+              }}>Return to Lobby</button>
+            </div>
           </div>
         )}
       </div>

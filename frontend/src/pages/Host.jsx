@@ -76,6 +76,7 @@ export default function Host() {
   const [confirmReset, setConfirmReset] = useState(false)
   const [confirmClear, setConfirmClear] = useState(false)
   const [confirmKick, setConfirmKick] = useState(null)
+  const [confirmEliminate, setConfirmEliminate] = useState(null)
 
   const [state, dispatch] = useReducer(hostReducer, {
     buzzerOrder: [],
@@ -135,13 +136,14 @@ export default function Host() {
     }
   }
 
-  const handleDisqualify = (teamName, username) => {
-    send({ type: 'disqualify', team_name: teamName, username: username || null })
-  }
-
   const handleKick = (teamName, username) => {
     setConfirmKick(null)
     send({ type: 'kick_user', team_name: teamName, username })
+  }
+
+  const handleEliminate = (teamName) => {
+    setConfirmEliminate(null)
+    send({ type: 'disqualify', team_name: teamName, username: null })
   }
 
   const handleReset = () => {
@@ -187,10 +189,10 @@ export default function Host() {
           background: #0f172a;
           padding: 1.5rem;
           font-family: system-ui, -apple-system, sans-serif;
+          overflow-y: auto;
         }
         .host-glass {
-          max-width: 1100px;
-          margin: 0 auto;
+          width: 100%;
         }
         .host-header {
           display: flex;
@@ -564,14 +566,13 @@ export default function Host() {
                     <div className="team-card-header">
                       <span className="team-card-name">{name}</span>
                       <div className="team-card-actions">
-                        <button onClick={() => handleDisqualify(name, null)} className="dq-btn">Disqualify</button>
+                        <button onClick={() => setConfirmEliminate({ teamName: name })} className="dq-btn">Eliminate</button>
                       </div>
                     </div>
                     {usernames.map((u) => (
                       <div key={u} className="member-row">
                         <span className="member-name">{u}</span>
                         <div className="member-actions">
-                          <button onClick={() => handleDisqualify(name, u)} className="remove-btn">Remove</button>
                           <button onClick={() => setConfirmKick({ teamName: name, username: u })} className="kick-btn">Kick</button>
                         </div>
                       </div>
@@ -642,12 +643,27 @@ export default function Host() {
       {confirmKick && (
         <div className="confirm-overlay" onClick={() => setConfirmKick(null)}>
           <div className="confirm-dialog" onClick={(e) => e.stopPropagation()}>
-            <div className="warn-icon">🦶</div>
+            <div className="warn-icon">⚠️</div>
             <p>Kick {confirmKick.username}?</p>
             <div className="sub">They will be disconnected from team {confirmKick.teamName}.</div>
             <div className="confirm-actions">
               <button className="confirm-yes" onClick={() => handleKick(confirmKick.teamName, confirmKick.username)}>Kick</button>
               <button className="confirm-no" onClick={() => setConfirmKick(null)}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Eliminate Confirmation */}
+      {confirmEliminate && (
+        <div className="confirm-overlay" onClick={() => setConfirmEliminate(null)}>
+          <div className="confirm-dialog" onClick={(e) => e.stopPropagation()}>
+            <div className="warn-icon">⚠️</div>
+            <p>Eliminate team {confirmEliminate.teamName}?</p>
+            <div className="sub">All members will be eliminated and unable to buzz.</div>
+            <div className="confirm-actions">
+              <button className="confirm-yes" onClick={() => handleEliminate(confirmEliminate.teamName)}>Eliminate</button>
+              <button className="confirm-no" onClick={() => setConfirmEliminate(null)}>Cancel</button>
             </div>
           </div>
         </div>
