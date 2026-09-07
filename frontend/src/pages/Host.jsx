@@ -180,19 +180,26 @@ export default function Host() {
       <style>{`
         html, body, #root {
           margin: 0 !important;
+          width: 100% !important;
           max-width: 100% !important;
           border: none !important;
+          border-inline: none !important;
+          text-align: left !important;
+          display: block !important;
         }
         .host-root {
+          width: 100%;
           min-height: 100vh;
           min-height: 100dvh;
           background: #0f172a;
           padding: 1.5rem;
           font-family: system-ui, -apple-system, sans-serif;
           overflow-y: auto;
+          box-sizing: border-box;
         }
         .host-glass {
           width: 100%;
+          box-sizing: border-box;
         }
         .host-header {
           display: flex;
