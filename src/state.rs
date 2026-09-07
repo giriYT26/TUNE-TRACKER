@@ -281,13 +281,14 @@ impl AppState {
             }
         }
 
-        let display_name = username.clone().unwrap_or_default();
-        let _ = self.tx.send(ServerMessage::TeamStatus {
-            team_name,
-            username: display_name,
-            status: TeamStatus::Disqualified,
-            warning_count: 3,
-        });
+        for u in &users_to_dq {
+            let _ = self.tx.send(ServerMessage::TeamStatus {
+                team_name: team_name.clone(),
+                username: u.clone(),
+                status: TeamStatus::Disqualified,
+                warning_count: 3,
+            });
+        }
     }
 
     pub async fn reset_violations(&self) {

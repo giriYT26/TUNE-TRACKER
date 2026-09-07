@@ -192,8 +192,7 @@ export default function Host() {
           overflow-y: auto;
         }
         .host-glass {
-          max-width: 1200px;
-          margin: 0 auto;
+          width: 100%;
         }
         .host-header {
           display: flex;
@@ -269,6 +268,7 @@ export default function Host() {
           transition: opacity 0.15s;
         }
         .ctrl-btn:hover { opacity: 0.85; }
+        .ctrl-btn-row { display: contents; }
         .round-input {
           margin-left: auto;
           display: flex;
@@ -461,10 +461,31 @@ export default function Host() {
         .confirm-yes { background: #dc2626; color: #fff; }
         .confirm-no { background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.6); }
         @media (max-width: 700px) {
-          .host-root { padding: 1rem; }
-          .host-title { font-size: 1.4rem; }
-          .grid { grid-template-columns: 1fr; }
-          .ctrl-bar { gap: 0.4rem; }
+          .host-root { padding: 0.75rem; }
+          .host-header { flex-direction: column; align-items: flex-start; gap: 0.6rem; }
+          .host-title { font-size: 1.3rem; }
+          .host-header-right { width: 100%; justify-content: space-between; flex-wrap: wrap; gap: 0.4rem; }
+          .lock-badge { font-size: 0.7rem; padding: 0.3rem 0.6rem; }
+          .logout-btn { font-size: 0.7rem; padding: 0.3rem 0.6rem; }
+          .ctrl-bar { flex-direction: column; align-items: stretch; gap: 0.5rem; padding: 0.6rem 0.75rem; }
+          .ctrl-btn { width: 100%; padding: 0.55rem; font-size: 0.85rem; }
+          .ctrl-btn-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0.4rem; }
+          .round-input { margin-left: 0; width: 100%; justify-content: space-between; }
+          .round-input input { flex: 1; width: auto; }
+          .grid { grid-template-columns: 1fr; gap: 0.75rem; }
+          .card-header { font-size: 0.85rem; padding: 0.5rem 0.75rem; }
+          .bz-table { font-size: 0.75rem; }
+          .bz-th { padding: 0.4rem 0.5rem; font-size: 0.65rem; }
+          .bz-td { padding: 0.4rem 0.5rem; }
+          .team-card { padding: 0.6rem 0.75rem; }
+          .team-card-name { font-size: 0.85rem; }
+          .member-row { padding: 0.3rem 0 0.3rem 0.5rem; }
+          .member-name { font-size: 0.8rem; }
+          .kick-btn { font-size: 0.65rem; padding: 0.15rem 0.35rem; }
+          .dq-btn { font-size: 0.65rem; padding: 0.2rem 0.4rem; }
+          .violation-bar { border-radius: 10px; }
+          .violation-header { padding: 0.5rem 0.75rem; font-size: 0.85rem; }
+          .violation-item { padding: 0.4rem 0.75rem; font-size: 0.75rem; }
         }
       `}</style>
 
@@ -490,18 +511,20 @@ export default function Host() {
 
           {/* Control Bar */}
           <div className="ctrl-bar">
-            <button onClick={() => sendControl('start')} className="ctrl-btn" style={{ background: '#16a34a' }}>
-              ▶ START
-            </button>
-            <button onClick={() => sendControl('lock')} className="ctrl-btn" style={{ background: '#d97706' }}>
-              🔒 LOCK
-            </button>
-            <button onClick={() => setConfirmReset(true)} className="ctrl-btn" style={{ background: '#dc2626' }}>
-              ↺ RESET
-            </button>
-            <button onClick={() => send({ type: 'next_question' })} className="ctrl-btn" style={{ background: '#2563eb' }}>
-              ⏭ NEXT
-            </button>
+            <div className="ctrl-btn-row">
+              <button onClick={() => sendControl('start')} className="ctrl-btn" style={{ background: '#16a34a' }}>
+                ▶ START
+              </button>
+              <button onClick={() => sendControl('lock')} className="ctrl-btn" style={{ background: '#d97706' }}>
+                🔒 LOCK
+              </button>
+              <button onClick={() => setConfirmReset(true)} className="ctrl-btn" style={{ background: '#dc2626' }}>
+                ↺ RESET
+              </button>
+              <button onClick={() => send({ type: 'next_question' })} className="ctrl-btn" style={{ background: '#2563eb' }}>
+                ⏭ NEXT
+              </button>
+            </div>
 
             <div className="round-input">
               <span>Round:</span>
