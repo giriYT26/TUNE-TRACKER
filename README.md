@@ -100,7 +100,7 @@ The server starts on **http://0.0.0.0:3000**.
 | Page | URL |
 |------|-----|
 | Team (lobby + buzzer) | http://localhost:3000/ |
-| Host dashboard | http://localhost:3000/host |
+| Host dashboard | http://localhost:3000/host/login |
 
 ### Development mode
 
