@@ -270,10 +270,14 @@ impl AppState {
             }
         };
 
+        for u in &users_to_dq {
+            self.remove_user_with_broadcast(u).await;
+        }
+
         {
             let mut dq = self.disqualified_users.write().await;
             for u in &users_to_dq {
-                dq.insert(u.clone());
+                dq.remove(u);
             }
         }
 

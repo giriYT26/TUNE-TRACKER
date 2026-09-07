@@ -192,7 +192,8 @@ export default function Host() {
           overflow-y: auto;
         }
         .host-glass {
-          width: 100%;
+          max-width: 1200px;
+          margin: 0 auto;
         }
         .host-header {
           display: flex;

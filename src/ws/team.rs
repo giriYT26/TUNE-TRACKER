@@ -123,19 +123,6 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
                                     "round_name": round.name
                                 });
                                 let _ = sender.send(Message::Text(reply.to_string().into())).await;
-
-                                let dq = state.disqualified_users.read().await;
-                                if dq.contains(&name) {
-                                    let _ = sender.send(Message::Text(
-                                        serde_json::to_string(&ServerMessage::TeamStatus {
-                                            team_name: team_name.clone().unwrap(),
-                                            username: name,
-                                            status: crate::state::TeamStatus::Disqualified,
-                                            warning_count: 3,
-                                        }).unwrap().into(),
-                                    )).await;
-                                }
-                                drop(dq);
                             }
                             Err(e) => {
                                 let _ = sender.send(Message::Text(
