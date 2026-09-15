@@ -1,38 +1,51 @@
 use axum::{
     extract::{
         ws::{Message, WebSocket, WebSocketUpgrade},
-        State,
+        ConnectInfo, State,
     },
     response::Response,
 };
 use futures::{SinkExt, StreamExt};
+use std::net::SocketAddr;
 use std::sync::Arc;
 
 use crate::state::{AppState, ClientMessage, RoundState};
 
-pub async fn handler(ws: WebSocketUpgrade, State(state): State<Arc<AppState>>) -> Response {
-    ws.on_upgrade(|socket| handle_socket(socket, state))
+pub async fn handler(
+    ws: WebSocketUpgrade,
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
+    State(state): State<Arc<AppState>>,
+) -> Response {
+    ws.on_upgrade(move |socket| handle_socket(socket, addr, state))
 }
 
-async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
+async fn handle_socket(socket: WebSocket, addr: SocketAddr, state: Arc<AppState>) {
     let (mut sender, mut receiver) = socket.split();
     let mut rx = state.tx.subscribe();
+
+    tracing::info!(ip = %addr, component = "host_ws", action = "host_connected");
 
     {
         let round = state.current_round.read().await;
         let update = crate::state::ServerMessage::BuzzerUpdate {
             buzzer_order: round.buzzer_order.clone(),
         };
-        let _ = sender.send(Message::Text(serde_json::to_string(&update).unwrap().into())).await;
+        let _ = sender
+            .send(Message::Text(serde_json::to_string(&update).unwrap().into()))
+            .await;
         let state_msg = crate::state::ServerMessage::RoundState {
             state: round.state.clone(),
             started_at_ms: round.started_at_ms,
         };
-        let _ = sender.send(Message::Text(serde_json::to_string(&state_msg).unwrap().into())).await;
+        let _ = sender
+            .send(Message::Text(serde_json::to_string(&state_msg).unwrap().into()))
+            .await;
         let name_msg = crate::state::ServerMessage::RoundName {
             name: round.name.clone(),
         };
-        let _ = sender.send(Message::Text(serde_json::to_string(&name_msg).unwrap().into())).await;
+        let _ = sender
+            .send(Message::Text(serde_json::to_string(&name_msg).unwrap().into()))
+            .await;
 
         let teams = state.connected_teams.read().await;
         for (team_name, usernames) in teams.iter() {
@@ -40,23 +53,36 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
                 team_name: team_name.clone(),
                 usernames: usernames.clone(),
             };
-            let _ = sender.send(Message::Text(serde_json::to_string(&joined).unwrap().into())).await;
+            let _ = sender
+                .send(Message::Text(serde_json::to_string(&joined).unwrap().into()))
+                .await;
         }
 
         let locked = *state.teams_locked.read().await;
-        let _ = sender.send(Message::Text(serde_json::to_string(&crate::state::ServerMessage::TeamLock { locked }).unwrap().into())).await;
+        let _ = sender
+            .send(Message::Text(
+                serde_json::to_string(&crate::state::ServerMessage::TeamLock { locked })
+                    .unwrap()
+                    .into(),
+            ))
+            .await;
     }
 
     let mut send_task = tokio::spawn(async move {
         while let Ok(msg) = rx.recv().await {
             let text = serde_json::to_string(&msg).unwrap();
-            if sender.send(Message::Text(text.into())).await.is_err() {
+            if sender
+                .send(Message::Text(text.into()))
+                .await
+                .is_err()
+            {
                 break;
             }
         }
     });
 
     let state2 = state.clone();
+    let addr2 = addr;
     let mut recv_task = tokio::spawn(async move {
         while let Some(Ok(Message::Text(text))) = receiver.next().await {
             let parsed: ClientMessage = match serde_json::from_str(&text) {
@@ -66,18 +92,23 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
 
             match parsed {
                 ClientMessage::Start => {
+                    tracing::info!(ip = %addr2, action = "round_start");
                     state2.set_round_state(RoundState::Active).await;
                 }
                 ClientMessage::Lock => {
+                    tracing::info!(ip = %addr2, action = "round_lock");
                     state2.set_round_state(RoundState::Locked).await;
                 }
                 ClientMessage::Reset => {
+                    tracing::info!(ip = %addr2, action = "round_reset");
                     state2.reset_buzzer().await;
                 }
                 ClientMessage::NextQuestion => {
+                    tracing::info!(ip = %addr2, action = "next_question");
                     state2.next_question().await;
                 }
                 ClientMessage::SetRoundName { name } => {
+                    tracing::info!(ip = %addr2, action = "set_round_name", name = %name);
                     state2.set_round_name(name).await;
                 }
                 ClientMessage::Disqualify { team_name, username } => {
@@ -104,4 +135,6 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
         _ = &mut send_task => recv_task.abort(),
         _ = &mut recv_task => send_task.abort(),
     }
+
+    tracing::info!(ip = %addr, component = "host_ws", action = "host_disconnected");
 }

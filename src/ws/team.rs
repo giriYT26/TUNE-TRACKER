@@ -1,28 +1,38 @@
 use axum::{
     extract::{
         ws::{Message, WebSocket, WebSocketUpgrade},
-        State,
+        ConnectInfo, State,
     },
     response::Response,
 };
 use futures::{SinkExt, StreamExt};
+use std::net::SocketAddr;
 use std::sync::Arc;
 
 use crate::state::{AppState, ClientMessage, ServerMessage};
 
-pub async fn handler(ws: WebSocketUpgrade, State(state): State<Arc<AppState>>) -> Response {
-    ws.on_upgrade(|socket| handle_socket(socket, state))
+pub async fn handler(
+    ws: WebSocketUpgrade,
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
+    State(state): State<Arc<AppState>>,
+) -> Response {
+    ws.on_upgrade(move |socket| handle_socket(socket, addr, state))
 }
 
-async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
+async fn handle_socket(socket: WebSocket, addr: SocketAddr, state: Arc<AppState>) {
     let (mut sender, mut receiver) = socket.split();
     let mut rx = state.tx.subscribe();
 
+    tracing::debug!(ip = %addr, component = "team_ws", action = "connected");
+
     // Send team list on connect
     let teams = state.connected_teams.read().await;
-    let team_data: Vec<_> = teams.iter().map(|(name, members)| {
-        serde_json::json!({ "name": name, "size": members.len(), "limit": 4 })
-    }).collect();
+    let team_data: Vec<_> = teams
+        .iter()
+        .map(|(name, members)| {
+            serde_json::json!({ "name": name, "size": members.len(), "limit": 4 })
+        })
+        .collect();
     drop(teams);
     let _ = sender
         .send(Message::Text(
@@ -91,6 +101,67 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
                 };
 
                 match parsed {
+                    ClientMessage::Reconnect { session_token } => {
+                        match state.resolve_session(&session_token).await {
+                            Some(info) => {
+                                // Re-add user to connected maps
+                                {
+                                    let mut users = state.connected_users.write().await;
+                                    users.insert(info.username.clone(), info.team_name.clone());
+                                }
+                                {
+                                    let mut teams = state.connected_teams.write().await;
+                                    if let Some(members) = teams.get_mut(&info.team_name) {
+                                        if !members.contains(&info.username) {
+                                            members.push(info.username.clone());
+                                        }
+                                    } else {
+                                        teams.insert(info.team_name.clone(), vec![info.username.clone()]);
+                                    }
+                                }
+
+                                // Broadcast updated team list
+                                let teams_snapshot = state.connected_teams.read().await;
+                                for (t_name, t_members) in teams_snapshot.iter() {
+                                    let _ = state.tx.send(ServerMessage::TeamJoined {
+                                        team_name: t_name.clone(),
+                                        usernames: t_members.clone(),
+                                    });
+                                }
+                                drop(teams_snapshot);
+
+                                team_name = Some(info.team_name.clone());
+                                username = Some(info.username.clone());
+
+                                let round = state.current_round.read().await;
+                                let round_name = round.name.clone();
+                                drop(round);
+
+                                let reply = serde_json::json!({
+                                    "type": "reconnect_accepted",
+                                    "session_token": session_token,
+                                    "team_name": info.team_name,
+                                    "username": info.username,
+                                    "round_name": round_name
+                                });
+                                let _ = sender.send(Message::Text(reply.to_string().into())).await;
+
+                                tracing::info!(
+                                    username = %info.username,
+                                    team = %info.team_name,
+                                    ip = %addr,
+                                    action = "reconnect",
+                                    token = %session_token
+                                );
+                            }
+                            None => {
+                                let _ = sender.send(Message::Text(
+                                    serde_json::json!({ "type": "error", "message": "Session expired. Please rejoin." })
+                                        .to_string().into(),
+                                )).await;
+                            }
+                        }
+                    }
                     ClientMessage::Join { team_name: name, action } => {
                         match state.join_team(name.clone(), action).await {
                             Ok(()) => {
@@ -115,14 +186,21 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
                         }
 
                         match state.add_username(team_name.clone().unwrap(), name.clone()).await {
-                            Ok(()) => {
+                            Ok(session_token) => {
                                 username = Some(name.clone());
                                 let round = state.current_round.read().await;
-                                let reply = serde_json::json!({
-                                    "type": "username_accepted",
-                                    "round_name": round.name
-                                });
-                                let _ = sender.send(Message::Text(reply.to_string().into())).await;
+                                let reply = ServerMessage::UsernameAccepted {
+                                    session_token,
+                                    round_name: round.name.clone(),
+                                };
+                                let _ = sender.send(Message::Text(serde_json::to_string(&reply).unwrap().into())).await;
+
+                                tracing::info!(
+                                    username = %name,
+                                    team = %team_name.as_deref().unwrap_or(""),
+                                    ip = %addr,
+                                    action = "username_accepted"
+                                );
                             }
                             Err(e) => {
                                 let _ = sender.send(Message::Text(
@@ -133,9 +211,12 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
                     }
                     ClientMessage::GetTeams => {
                         let teams = state.connected_teams.read().await;
-                        let team_data: Vec<_> = teams.iter().map(|(name, members)| {
-                            serde_json::json!({ "name": name, "size": members.len(), "limit": 4 })
-                        }).collect();
+                        let team_data: Vec<_> = teams
+                            .iter()
+                            .map(|(name, members)| {
+                                serde_json::json!({ "name": name, "size": members.len(), "limit": 4 })
+                            })
+                            .collect();
                         let _ = sender.send(Message::Text(
                             serde_json::json!({ "type": "team_list", "teams": team_data }).to_string().into(),
                         )).await;
@@ -165,7 +246,15 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
         }
     }
 
+    // On disconnect, remove user from connected maps
     if let Some(ref uname) = username {
         state.remove_user_with_broadcast(uname).await;
+        tracing::info!(
+            username = %uname,
+            ip = %addr,
+            action = "disconnected"
+        );
+    } else {
+        tracing::debug!(ip = %addr, action = "disconnected", note = "no username set");
     }
 }

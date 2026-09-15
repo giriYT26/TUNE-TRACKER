@@ -1,0 +1,11 @@
+.git
+target
+frontend/node_modules
+frontend/dist
+*.md
+.env
+.env.*
+.vscode
+.idea
+*.pdb
+*.exe

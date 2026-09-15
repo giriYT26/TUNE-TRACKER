@@ -7,7 +7,7 @@ function formatReactionTime(ms) {
   const min = Math.floor(ms / 60000)
   const sec = Math.floor((ms % 60000) / 1000)
   const msPart = ms % 1000
-  return `${String(min).padStart(2, '0')}:${String(sec).padStart(2, '0')}.${String(msPart).padStart(3, '0')}`
+  return `${String(min).padStart(2, '0')}:${String(sec).padStart(2, '0')}:${String(msPart).padStart(3, '0')}`
 }
 
 function hostReducer(state, action) {
@@ -195,6 +195,7 @@ export default function Host() {
           padding: 1.5rem;
           font-family: system-ui, -apple-system, sans-serif;
           overflow-y: auto;
+          overflow-x: hidden;
           box-sizing: border-box;
         }
         .host-glass {
@@ -293,6 +294,7 @@ export default function Host() {
           width: 140px;
         }
         .round-input input:focus { outline: none; border-color: rgba(168,139,250,0.5); }
+        .round-current { color: #64748b; font-size: 0.8rem; margin-left: 0.25rem; }
         .set-btn {
           padding: 0.35rem 0.7rem;
           background: #3b82f6;
@@ -353,6 +355,7 @@ export default function Host() {
           color: #e2e8f0;
           border-bottom: 1px solid rgba(148,163,184,0.05);
         }
+        .bz-cards { display: none; }
         .team-card {
           padding: 0.75rem 1rem;
           border-bottom: 1px solid rgba(148,163,184,0.08);
@@ -468,31 +471,80 @@ export default function Host() {
         .confirm-yes { background: #dc2626; color: #fff; }
         .confirm-no { background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.6); }
         @media (max-width: 700px) {
-          .host-root { padding: 0.75rem; }
+          .host-root { padding: 1rem; }
           .host-header { flex-direction: column; align-items: flex-start; gap: 0.6rem; }
           .host-title { font-size: 1.3rem; }
           .host-header-right { width: 100%; justify-content: space-between; flex-wrap: wrap; gap: 0.4rem; }
-          .lock-badge { font-size: 0.7rem; padding: 0.3rem 0.6rem; }
-          .logout-btn { font-size: 0.7rem; padding: 0.3rem 0.6rem; }
+          .lock-badge { font-size: 0.7rem; padding: 0.3rem 0.6rem; min-height: 44px; display: inline-flex; align-items: center; }
+          .logout-btn { font-size: 0.7rem; padding: 0.3rem 0.6rem; min-height: 44px; display: inline-flex; align-items: center; }
           .ctrl-bar { flex-direction: column; align-items: stretch; gap: 0.5rem; padding: 0.6rem 0.75rem; }
-          .ctrl-btn { width: 100%; padding: 0.55rem; font-size: 0.85rem; }
+          .ctrl-btn { width: 100%; padding: 0.65rem; font-size: 0.85rem; min-height: 44px; }
           .ctrl-btn-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0.4rem; }
-          .round-input { margin-left: 0; width: 100%; justify-content: space-between; }
-          .round-input input { flex: 1; width: auto; }
+          .round-input { margin-left: 0; width: 100%; flex-direction: column; align-items: stretch; gap: 0.4rem; }
+          .round-input input { width: 100%; }
+          .round-input .set-btn { width: 100%; min-height: 44px; }
+          .round-input .round-current { margin-left: 0; text-align: center; }
           .grid { grid-template-columns: 1fr; gap: 0.75rem; }
           .card-header { font-size: 0.85rem; padding: 0.5rem 0.75rem; }
-          .bz-table { font-size: 0.75rem; }
-          .bz-th { padding: 0.4rem 0.5rem; font-size: 0.65rem; }
-          .bz-td { padding: 0.4rem 0.5rem; }
+
+          /* Buzzer table: hide on mobile */
+          .bz-table { display: none; }
+
+          /* Buzzer card layout for mobile */
+          .bz-cards { display: flex; flex-direction: column; }
+          .bz-card {
+            display: flex;
+            align-items: center;
+            padding: 0.6rem 0.75rem;
+            border-bottom: 1px solid rgba(148,163,184,0.05);
+            gap: 0.6rem;
+          }
+          .bz-card:first-child { background: rgba(34,197,94,0.08); }
+          .bz-card:nth-child(2) { background: rgba(34,197,94,0.05); }
+          .bz-card:nth-child(3) { background: rgba(34,197,94,0.03); }
+          .bz-card-pos {
+            font-size: 0.95rem;
+            font-weight: 700;
+            color: #f3f4f6;
+            min-width: 2.2rem;
+            text-align: center;
+            flex-shrink: 0;
+          }
+          .bz-card-info { flex: 1; min-width: 0; }
+          .bz-card-team {
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: #f3f4f6;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+          }
+          .bz-card-user {
+            font-size: 0.75rem;
+            color: #94a3b8;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+          }
+          .bz-card-time {
+            font-size: 0.8rem;
+            color: #94a3b8;
+            font-variant-numeric: tabular-nums;
+            flex-shrink: 0;
+            font-family: ui-monospace, Consolas, monospace;
+          }
+
           .team-card { padding: 0.6rem 0.75rem; }
           .team-card-name { font-size: 0.85rem; }
+          .team-card-actions { gap: 0.5rem; }
           .member-row { padding: 0.3rem 0 0.3rem 0.5rem; }
           .member-name { font-size: 0.8rem; }
-          .kick-btn { font-size: 0.65rem; padding: 0.15rem 0.35rem; }
-          .dq-btn { font-size: 0.65rem; padding: 0.2rem 0.4rem; }
+          .kick-btn { font-size: 0.65rem; padding: 0.25rem 0.45rem; min-height: 36px; }
+          .dq-btn { font-size: 0.65rem; padding: 0.25rem 0.45rem; min-height: 36px; }
           .violation-bar { border-radius: 10px; }
           .violation-header { padding: 0.5rem 0.75rem; font-size: 0.85rem; }
           .violation-item { padding: 0.4rem 0.75rem; font-size: 0.75rem; }
+          .set-btn { min-height: 44px; }
         }
       `}</style>
 
@@ -539,7 +591,7 @@ export default function Host() {
                 onChange={(e) => setRoundNameInput(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleSetRoundName()} />
               <button onClick={handleSetRoundName} className="set-btn">Set</button>
-              <span style={{ color: '#64748b', fontSize: '0.8rem', marginLeft: '0.25rem' }}>
+              <span className="round-current">
                 {state.roundName}
               </span>
             </div>
@@ -556,6 +608,7 @@ export default function Host() {
               {state.buzzerOrder.length === 0 ? (
                 <div className="empty-row">No buzzer presses yet</div>
               ) : (
+                <>
                 <table className="bz-table">
                   <thead>
                     <tr>
@@ -580,6 +633,23 @@ export default function Host() {
                     ))}
                   </tbody>
                 </table>
+                <div className="bz-cards">
+                  {state.buzzerOrder.map((event, i) => (
+                    <div key={event.username} className="bz-card">
+                      <div className="bz-card-pos">
+                        {i < 3 ? medals[i] : `#${event.position}`}
+                      </div>
+                      <div className="bz-card-info">
+                        <div className="bz-card-team">{event.team_name}</div>
+                        <div className="bz-card-user">{event.username}</div>
+                      </div>
+                      <div className="bz-card-time">
+                        {formatReactionTime(event.reaction_time_ms)}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                </>
               )}
             </div>
 

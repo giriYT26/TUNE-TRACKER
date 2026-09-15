@@ -1,0 +1,12 @@
+services:
+  tune-tracker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: tune-tracker
+    ports:
+      - "0.0.0.0:3000:3000"
+    environment:
+      - PORT=3000
+      - RUST_LOG=info,tune_tracker=debug
+    restart: unless-stopped

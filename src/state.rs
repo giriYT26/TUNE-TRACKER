@@ -36,6 +36,13 @@ pub struct Round {
     pub started_at_ms: Option<u64>,
 }
 
+#[derive(Debug, Clone)]
+pub struct SessionInfo {
+    pub team_name: String,
+    pub username: String,
+    pub joined_at_ms: u64,
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ServerMessage {
@@ -47,6 +54,8 @@ pub enum ServerMessage {
     ViolationReport { team_name: String, username: String, kind: String, warning_count: u8 },
     Kicked { team_name: String, username: String },
     TeamLock { locked: bool },
+    UsernameAccepted { session_token: String, round_name: String },
+    ReconnectAccepted { session_token: String, team_name: String, username: String, round_name: String },
 }
 
 #[derive(Debug, Deserialize)]
@@ -54,6 +63,7 @@ pub enum ServerMessage {
 pub enum ClientMessage {
     Join { team_name: String, action: String },
     Username { username: String },
+    Reconnect { session_token: String },
     GetTeams,
     Buzz { reaction_time_ms: Option<u64> },
     Violation { kind: String },
@@ -78,6 +88,7 @@ pub struct AppState {
     pub warning_counts: RwLock<HashMap<String, u8>>,
     pub disqualified_users: RwLock<HashSet<String>>,
     pub teams_locked: RwLock<bool>,
+    pub session_tokens: RwLock<HashMap<String, SessionInfo>>,
 }
 
 impl AppState {
@@ -97,6 +108,7 @@ impl AppState {
             warning_counts: RwLock::new(HashMap::new()),
             disqualified_users: RwLock::new(HashSet::new()),
             teams_locked: RwLock::new(false),
+            session_tokens: RwLock::new(HashMap::new()),
         }
     }
 
@@ -115,7 +127,8 @@ impl AppState {
                 return Err("Team name already taken".to_string());
             }
             let mut teams = self.connected_teams.write().await;
-            teams.insert(team_name, Vec::new());
+            teams.insert(team_name.clone(), Vec::new());
+            tracing::info!(team = %team_name, action = "team_created");
         } else {
             if !team_exists {
                 return Err("Team not found. Create a new team instead.".to_string());
@@ -124,7 +137,7 @@ impl AppState {
         Ok(())
     }
 
-    pub async fn add_username(&self, team_name: String, username: String) -> Result<(), String> {
+    pub async fn add_username(&self, team_name: String, username: String) -> Result<String, String> {
         let users = self.connected_users.read().await;
         if users.contains_key(&username) {
             return Err("Username already taken".to_string());
@@ -144,16 +157,49 @@ impl AppState {
 
         let mut teams = self.connected_teams.write().await;
         if let Some(members) = teams.get_mut(&team_name) {
-            members.push(username);
+            members.push(username.clone());
         }
 
         let usernames = teams.get(&team_name).cloned().unwrap_or_default();
         let _ = self.tx.send(ServerMessage::TeamJoined {
-            team_name,
+            team_name: team_name.clone(),
             usernames,
         });
 
-        Ok(())
+        let token = Uuid::new_v4().to_string();
+        let session_info = SessionInfo {
+            team_name: team_name.clone(),
+            username: username.clone(),
+            joined_at_ms: chrono::Utc::now().timestamp_millis() as u64,
+        };
+        let mut tokens = self.session_tokens.write().await;
+        tokens.insert(token.clone(), session_info);
+
+        tracing::info!(
+            username = %username,
+            team = %team_name,
+            action = "join",
+            token = %token
+        );
+
+        Ok(token)
+    }
+
+    pub async fn resolve_session(&self, token: &str) -> Option<SessionInfo> {
+        let tokens = self.session_tokens.read().await;
+        tokens.get(token).cloned()
+    }
+
+    pub async fn remove_session(&self, token: &str) {
+        let mut tokens = self.session_tokens.write().await;
+        if let Some(info) = tokens.remove(token) {
+            tracing::info!(
+                username = %info.username,
+                team = %info.team_name,
+                action = "session_removed",
+                token = %token
+            );
+        }
     }
 
     pub async fn add_buzzer_event(&self, username: String, reaction_time_ms: Option<u64>) -> Option<BuzzerEvent> {
@@ -175,8 +221,8 @@ impl AppState {
         }
         let position = round.buzzer_order.len() + 1;
         let event = BuzzerEvent {
-            team_name,
-            username,
+            team_name: team_name.clone(),
+            username: username.clone(),
             position,
             reaction_time_ms,
         };
@@ -186,6 +232,15 @@ impl AppState {
             buzzer_order: round.buzzer_order.clone(),
         };
         let _ = self.tx.send(update);
+
+        tracing::info!(
+            username = %username,
+            team = %team_name,
+            action = "buzz",
+            position = position,
+            reaction_ms = ?reaction_time_ms
+        );
+
         Some(event)
     }
 
@@ -220,6 +275,7 @@ impl AppState {
             state: RoundState::Idle,
             started_at_ms: None,
         });
+        tracing::info!(action = "buzzer_reset");
     }
 
     pub async fn next_question(&self) {
@@ -236,6 +292,7 @@ impl AppState {
             state: RoundState::Active,
             started_at_ms,
         });
+        tracing::info!(action = "next_question");
     }
 
     pub async fn handle_violation(&self, username: String, kind: String) {
@@ -251,6 +308,14 @@ impl AppState {
         *count += 1;
         let warning_count = *count;
         drop(counts);
+
+        tracing::warn!(
+            username = %username,
+            team = %team_name,
+            action = "violation",
+            kind = %kind,
+            warning_count = warning_count
+        );
 
         let _ = self.tx.send(ServerMessage::ViolationReport {
             team_name,
@@ -271,6 +336,11 @@ impl AppState {
         };
 
         for u in &users_to_dq {
+            tracing::info!(
+                username = %u,
+                team = %team_name,
+                action = "disqualify"
+            );
             self.remove_user_with_broadcast(u).await;
         }
 
@@ -296,21 +366,29 @@ impl AppState {
         counts.clear();
         let mut dq = self.disqualified_users.write().await;
         dq.clear();
+        tracing::info!(action = "violations_reset");
     }
 
     pub async fn lock_teams(&self) {
         let mut locked = self.teams_locked.write().await;
         *locked = true;
         let _ = self.tx.send(ServerMessage::TeamLock { locked: true });
+        tracing::info!(action = "teams_locked");
     }
 
     pub async fn unlock_teams(&self) {
         let mut locked = self.teams_locked.write().await;
         *locked = false;
         let _ = self.tx.send(ServerMessage::TeamLock { locked: false });
+        tracing::info!(action = "teams_unlocked");
     }
 
     pub async fn kick_user(&self, team_name: String, username: String) {
+        tracing::info!(
+            username = %username,
+            team = %team_name,
+            action = "kick"
+        );
         self.remove_user_with_broadcast(&username).await;
         let _ = self.tx.send(ServerMessage::Kicked { team_name, username });
     }
@@ -345,6 +423,12 @@ impl AppState {
                 Vec::new()
             }
         };
+
+        tracing::info!(
+            username = %username,
+            team = %team_name,
+            action = "disconnect"
+        );
 
         let _ = self.tx.send(ServerMessage::TeamJoined {
             team_name,

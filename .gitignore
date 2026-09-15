@@ -4,3 +4,6 @@ dist/
 .vite/
 *.exe
 *.pdb
+.env
+.env.*
+!.env.example

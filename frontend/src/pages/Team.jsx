@@ -29,7 +29,7 @@ function formatReactionTime(ms) {
   const min = Math.floor(ms / 60000)
   const sec = Math.floor((ms % 60000) / 1000)
   const msPart = ms % 1000
-  return `${String(min).padStart(2, '0')}:${String(sec).padStart(2, '0')}.${String(msPart).padStart(3, '0')}`
+  return `${String(min).padStart(2, '0')}:${String(sec).padStart(2, '0')}:${String(msPart).padStart(3, '0')}`
 }
 
 function teamReducer(state, action) {
@@ -64,6 +64,8 @@ function teamReducer(state, action) {
       return { ...state, menuOpen: false }
     case 'SET_TEAM_LOCK':
       return { ...state, teamsLocked: action.locked }
+    case 'SET_SESSION_TOKEN':
+      return { ...state, sessionToken: action.token }
     case 'BUZZER_UPDATE': {
       const myEvent = action.buzzerOrder.find(
         (e) => e.team_name === state.teamName
@@ -84,16 +86,33 @@ function teamReducer(state, action) {
     }
     case 'ROUND_STATE_CHANGE': {
       const isNewRound = action.state === 'Active' && action.startedAtMs !== state.roundStartTime
+      if (isNewRound) {
+        return {
+          ...state,
+          roundState: action.state,
+          buzzerDisabled: false,
+          buzzerPosition: null,
+          myStatus: 'Pending',
+          roundStartTime: action.startedAtMs,
+          reactionTime: null,
+          teamBuzzed: false,
+          teamBuzzTime: null,
+          buzzerOrder: [],
+        }
+      }
+      if (action.state === 'Active' && !isNewRound) {
+        return {
+          ...state,
+          roundState: action.state,
+          roundStartTime: action.startedAtMs,
+        }
+      }
       return {
         ...state,
         roundState: action.state,
         buzzerDisabled: action.state !== 'Active',
         buzzerPosition: action.state === 'Active' ? null : state.buzzerPosition,
-        myStatus: action.state === 'Active' ? 'Pending' : state.myStatus,
         roundStartTime: action.state === 'Active' ? action.startedAtMs : null,
-        reactionTime: isNewRound ? null : state.reactionTime,
-        teamBuzzed: isNewRound ? false : state.teamBuzzed,
-        buzzerOrder: isNewRound ? [] : state.buzzerOrder,
       }
     }
     case 'RESET_SESSION':
@@ -116,6 +135,7 @@ function teamReducer(state, action) {
         buzzerOrder: [],
         menuOpen: false,
         teamsLocked: state.teamsLocked,
+        sessionToken: null,
       }
     default:
       return state
@@ -131,19 +151,20 @@ function getInitialState() {
       username: saved.username || '',
       action: saved.action || '',
       roundName: 'Round 1',
-      myStatus: saved.teamBuzzed ? 'Answered' : 'Pending',
-      buzzerDisabled: saved.teamBuzzed || false,
-      buzzerPosition: saved.buzzerPosition ?? null,
-      roundState: saved.roundStartTime ? 'Active' : 'Idle',
+      myStatus: 'Pending',
+      buzzerDisabled: true,
+      buzzerPosition: null,
+      roundState: 'Idle',
       teamList: [],
       teamMembers: [],
-      roundStartTime: saved.roundStartTime ?? null,
+      roundStartTime: null,
       reactionTime: null,
-      teamBuzzed: saved.teamBuzzed || false,
-      teamBuzzTime: saved.teamBuzzTime ?? null,
+      teamBuzzed: false,
+      teamBuzzTime: null,
       buzzerOrder: [],
       menuOpen: false,
       teamsLocked: false,
+      sessionToken: saved.sessionToken || null,
     }
   }
   return {
@@ -165,6 +186,7 @@ function getInitialState() {
     buzzerOrder: [],
     menuOpen: false,
     teamsLocked: false,
+    sessionToken: null,
   }
 }
 
@@ -211,6 +233,18 @@ export default function Team() {
           setJoinError('')
           break
         case 'username_accepted':
+          dispatch({ type: 'SET_ROUND_NAME', name: msg.round_name || 'Round 1' })
+          dispatch({ type: 'SET_SCREEN', screen: 'buzzer' })
+          if (msg.session_token) {
+            dispatch({ type: 'SET_SESSION_TOKEN', token: msg.session_token })
+          }
+          setShowUsernameModal(false)
+          setJoinError('')
+          break
+        case 'reconnect_accepted':
+          dispatch({ type: 'SET_SESSION_TOKEN', token: msg.session_token })
+          dispatch({ type: 'SET_TEAM_NAME', name: msg.team_name })
+          dispatch({ type: 'SET_USERNAME', name: msg.username })
           dispatch({ type: 'SET_ROUND_NAME', name: msg.round_name || 'Round 1' })
           dispatch({ type: 'SET_SCREEN', screen: 'buzzer' })
           setShowUsernameModal(false)
@@ -277,7 +311,10 @@ export default function Team() {
     if (reregisteredRef.current) return
 
     const saved = loadSession()
-    if (saved && saved.teamName && saved.username) {
+    if (saved && saved.sessionToken && saved.teamName && saved.username) {
+      reregisteredRef.current = true
+      send({ type: 'reconnect', session_token: saved.sessionToken })
+    } else if (saved && saved.teamName && saved.username) {
       reregisteredRef.current = true
       send({ type: 'join', team_name: saved.teamName, action: saved.action || 'join' })
       send({ type: 'username', username: saved.username })
@@ -300,9 +337,10 @@ export default function Team() {
         teamBuzzTime: state.teamBuzzTime,
         roundStartTime: state.roundStartTime,
         buzzerPosition: state.buzzerPosition,
+        sessionToken: state.sessionToken,
       })
     }
-  }, [showUsernameModal, state.screen, state.teamName, state.username, chosenAction, state.action, state.teamBuzzed, state.teamBuzzTime, state.roundStartTime, state.buzzerPosition])
+  }, [showUsernameModal, state.screen, state.teamName, state.username, chosenAction, state.action, state.teamBuzzed, state.teamBuzzTime, state.roundStartTime, state.buzzerPosition, state.sessionToken])
 
   const handleJoinTeam = (teamName) => {
     dispatch({ type: 'SET_TEAM_NAME', name: teamName })
@@ -760,7 +798,7 @@ export default function Team() {
                   ? formatReactionTime(state.teamBuzzTime)
                   : state.roundStartTime
                     ? formatReactionTime(Date.now() - state.roundStartTime)
-                    : '0:00.000'}
+                    : '00:00:000'}
             </div>
 
               <div style={{ margin: '1.5rem 0' }}>
