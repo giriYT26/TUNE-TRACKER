@@ -1,29 +1,24 @@
 use axum::{
     extract::{
         ws::{Message, WebSocket, WebSocketUpgrade},
-        ConnectInfo, State,
+        State,
     },
     response::Response,
 };
 use futures::{SinkExt, StreamExt};
-use std::net::SocketAddr;
 use std::sync::Arc;
 
 use crate::state::{AppState, ClientMessage, ServerMessage};
 
-pub async fn handler(
-    ws: WebSocketUpgrade,
-    ConnectInfo(addr): ConnectInfo<SocketAddr>,
-    State(state): State<Arc<AppState>>,
-) -> Response {
-    ws.on_upgrade(move |socket| handle_socket(socket, addr, state))
+pub async fn handler(ws: WebSocketUpgrade, State(state): State<Arc<AppState>>) -> Response {
+    ws.on_upgrade(move |socket| handle_socket(socket, state))
 }
 
-async fn handle_socket(socket: WebSocket, addr: SocketAddr, state: Arc<AppState>) {
+async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
     let (mut sender, mut receiver) = socket.split();
     let mut rx = state.tx.subscribe();
 
-    tracing::debug!(ip = %addr, component = "team_ws", action = "connected");
+    tracing::debug!(component = "team_ws", action = "connected");
 
     // Send team list on connect
     let teams = state.connected_teams.read().await;
@@ -149,7 +144,6 @@ async fn handle_socket(socket: WebSocket, addr: SocketAddr, state: Arc<AppState>
                                 tracing::info!(
                                     username = %info.username,
                                     team = %info.team_name,
-                                    ip = %addr,
                                     action = "reconnect",
                                     token = %session_token
                                 );
@@ -198,7 +192,6 @@ async fn handle_socket(socket: WebSocket, addr: SocketAddr, state: Arc<AppState>
                                 tracing::info!(
                                     username = %name,
                                     team = %team_name.as_deref().unwrap_or(""),
-                                    ip = %addr,
                                     action = "username_accepted"
                                 );
                             }
@@ -251,10 +244,9 @@ async fn handle_socket(socket: WebSocket, addr: SocketAddr, state: Arc<AppState>
         state.remove_user_with_broadcast(uname).await;
         tracing::info!(
             username = %uname,
-            ip = %addr,
             action = "disconnected"
         );
     } else {
-        tracing::debug!(ip = %addr, action = "disconnected", note = "no username set");
+        tracing::debug!(action = "disconnected", note = "no username set");
     }
 }
