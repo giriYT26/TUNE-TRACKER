@@ -407,27 +407,30 @@ const ShapeGrid: React.FC<ShapeGridProps> = ({
       }
     };
 
-    const io = new IntersectionObserver(
-      ([entry]) => {
-        isVisible = entry.isIntersecting;
-        isVisible ? tryStart() : tryStop();
-      },
-      { threshold: 0 }
-    );
-    io.observe(canvas);
-
     const onVisibility = () => {
       isPageVisible = !document.hidden;
       isPageVisible ? tryStart() : tryStop();
     };
     document.addEventListener('visibilitychange', onVisibility);
 
+    let io = null;
+    if (typeof IntersectionObserver !== 'undefined') {
+      io = new IntersectionObserver(
+        ([entry]) => {
+          isVisible = entry.isIntersecting;
+          isVisible ? tryStart() : tryStop();
+        },
+        { threshold: 0 }
+      );
+      io.observe(canvas);
+    }
+
     tryStart();
 
     return () => {
       window.removeEventListener('resize', resizeCanvas);
       tryStop();
-      io.disconnect();
+      if (io) io.disconnect();
       document.removeEventListener('visibilitychange', onVisibility);
       canvas.removeEventListener('mousemove', handleMouseMove);
       canvas.removeEventListener('mouseleave', handleMouseLeave);

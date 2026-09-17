@@ -3,6 +3,9 @@ import { defineConfig } from 'vite'
 
 export default defineConfig({
   plugins: [react()],
+  build: {
+    target: 'es2018',
+  },
   server: {
     proxy: {
       '/ws': {

@@ -574,7 +574,7 @@ export default function Team() {
         .buzzer-glass .info-row { display: flex; justify-content: center; gap: 1.5rem; flex-wrap: wrap; margin-bottom: 0.75rem; font-size: 0.85rem; }
         .buzzer-glass .info-label { color: #94a3b8; }
         .buzzer-glass .info-value { color: #e2e8f0; font-weight: 600; }
-        .buzzer-glass .info-active { color: #22c55e; }
+        .buzzer-glass .info-locked { color: #ef4444; }
         .reaction-timer { font-size: 2rem; font-family: monospace; font-variant-numeric: tabular-nums; color: rgba(255,255,255,0.7); margin: 1rem 0; text-shadow: 0 0 12px rgba(168,85,247,0.3); }
         .reaction-timer.frozen { color: #22c55e; font-weight: bold; text-shadow: 0 0 16px rgba(34,197,94,0.5); }
         .buzz-btn { font-size: 2rem; padding: 1rem 3rem; border: none; border-radius: 12px; color: #fff; }
@@ -777,14 +777,13 @@ export default function Team() {
 
               <div className="info-row">
                 <span className="info-label">Round: <span className="info-value">{state.roundName}</span></span>
-                <span className={state.roundState === 'Active' ? 'info-active' : 'info-label'}>
-                  {state.roundState === 'Active' ? '● Active' : '○ Inactive'}
-                </span>
                 <span className="info-label">Status: <span style={{
-                  color: state.roundState !== 'Active' ? '#ef4444' :
+                  color: state.roundState === 'Locked' ? '#ef4444' :
+                         state.roundState !== 'Active' ? '#ef4444' :
                          state.myStatus === 'Answered' ? '#22c55e' : '#eab308',
                   fontWeight: 600
-                }}>{state.roundState !== 'Active' ? 'Not Started' : state.myStatus}</span></span>
+                }}>{state.roundState === 'Locked' ? 'Locked' :
+                     state.roundState !== 'Active' ? 'Not Started' : state.myStatus}</span></span>
                 {state.buzzerPosition !== null && (
                   <span className="info-label">Position: <span className="info-value">#{state.buzzerPosition}</span></span>
                 )}

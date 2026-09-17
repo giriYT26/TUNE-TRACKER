@@ -571,17 +571,34 @@ export default function Host() {
           {/* Control Bar */}
           <div className="ctrl-bar">
             <div className="ctrl-btn-row">
-              <button onClick={() => sendControl('start')} className="ctrl-btn" style={{ background: '#16a34a' }}>
-                ▶ START
-              </button>
-              <button onClick={() => sendControl('lock')} className="ctrl-btn" style={{ background: '#d97706' }}>
-                🔒 LOCK
-              </button>
+              {state.roundState === 'Active' ? (
+                <button className="ctrl-btn" style={{ background: 'rgba(22,163,74,0.3)', color: '#86efac', cursor: 'default' }}>
+                  ● ROUND ACTIVE
+                </button>
+              ) : state.roundState === 'Locked' ? (
+                <button onClick={() => sendControl('start')} className="ctrl-btn" style={{ background: '#2563eb' }}>
+                  🔓 UNLOCK ROUND
+                </button>
+              ) : (
+                <button onClick={() => sendControl('start')} className="ctrl-btn" style={{ background: '#16a34a' }}>
+                  ▶ START
+                </button>
+              )}
+              {state.roundState === 'Active' ? (
+                <button onClick={() => sendControl('lock')} className="ctrl-btn" style={{ background: '#d97706' }}>
+                  🔒 LOCK
+                </button>
+              ) : state.roundState === 'Locked' ? (
+                <button className="ctrl-btn" style={{ background: 'rgba(217,119,6,0.3)', color: '#fbbf24', cursor: 'default' }}>
+                  🔒 LOCKED
+                </button>
+              ) : (
+                <button onClick={() => sendControl('lock')} className="ctrl-btn" style={{ background: '#d97706', opacity: 0.5 }}>
+                  🔒 LOCK
+                </button>
+              )}
               <button onClick={() => setConfirmReset(true)} className="ctrl-btn" style={{ background: '#dc2626' }}>
                 ↺ RESET
-              </button>
-              <button onClick={() => send({ type: 'next_question' })} className="ctrl-btn" style={{ background: '#2563eb' }}>
-                ⏭ NEXT
               </button>
             </div>
 
