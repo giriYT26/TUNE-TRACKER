@@ -7,12 +7,13 @@ watches buzzer order, team status, and violation warnings live.
 
 ## Tech stack
 
-- **Backend:** Rust, `axum` (HTTP + WebSocket) on `tokio`
-- **Shared state:** `Arc<AppState>` with `tokio::sync::RwLock` + `broadcast` channels
-  for pushing live updates to every connected client
-- **Frontend:** React 19, Vite, React Router — served by the same Rust server
-  via `tower-http::ServeDir` (no separate deployment needed)
+- **Backend:** Rust 1.85+, `axum` 0.7 (HTTP + WebSocket) on `tokio`
+- **Shared state:** `Arc<AppState>` with `tokio::sync::RwLock` + `broadcast`
+  channels for pushing live updates to every connected client
+- **Frontend:** React 19, Vite 8, React Router 7 — served by the same Rust
+  server via `tower-http::ServeDir` (no separate deployment needed)
 - **Styling:** Inline glassmorphism CSS, ShapeGrid animated hexagon background
+- **Containerization:** Multi-stage Docker build (node → rust → alpine)
 
 Anti-cheat detection (tab switching, losing focus, exiting fullscreen)
 happens in browser JS using the Page Visibility API and related browser
@@ -22,56 +23,75 @@ WebSocket connection.
 ## Features
 
 - Unique team-name join flow, no separate accounts
+- Session token reconnection — rejoin a team after disconnect without
+  re-entering name
 - Server-authoritative buzzer timestamping and ordering (client timestamps
   are never trusted)
 - Unlimited buzzer order display — all teams that press are shown, in order
-- Host controls: Start / Lock / Reset / Next Question
+- Host controls: Start / Lock / Unlock / Reset
 - Host can **Eliminate** entire teams (with confirmation dialog)
 - Host can **Kick** individual members (disconnects their WebSocket)
-- Host can **Lock/Unlock** team creation
+- Host can **Lock/Unlock** team registration
 - Violation tracking with warning counter
-- Anti-cheating monitoring: tab switches, window blur, fullscreen exits
+- Anti-cheat monitoring: tab switches, window blur, fullscreen exits
 - Competition rules displayed in the lobby
 - Team search when 1+ teams exist
 - Eliminated players see a "You got eliminated" overlay and return to lobby
-- Responsive design for desktop and mobile
+- Responsive design for desktop and mobile (card layout on small screens)
+- Docker containerization for easy deployment
+- LAN access — binds to `0.0.0.0` for same-network play
+- 8 integration tests covering join, reconnect, kick, lock, buzz, and round state
 
 ## Project structure
 
 ```
 TUNE-TRACKER/
 ├── Cargo.toml
+├── Cargo.lock
+├── Dockerfile                    # multi-stage: node → rust → alpine
+├── docker-compose.yml
+├── .dockerignore
 ├── src/
-│   ├── main.rs              # server bootstrap, routes
-│   ├── state.rs             # AppState, message enums, business logic
+│   ├── main.rs                   # server bootstrap, configurable PORT
+│   ├── lib.rs                    # create_app() for tests + main
+│   ├── state.rs                  # AppState, message enums, session tokens
 │   └── ws/
 │       ├── mod.rs
-│       ├── team.rs          # team-side WebSocket handler
-│       └── host.rs          # host-side WebSocket handler
+│       ├── team.rs               # team-side WebSocket handler
+│       └── host.rs               # host-side WebSocket handler
+├── tests/
+│   └── integration.rs            # 8 integration tests (tokio-tungstenite)
 ├── frontend/
 │   ├── package.json
-│   ├── vite.config.js
+│   ├── vite.config.js            # proxy + es2018 build target
+│   ├── index.html
 │   ├── src/
 │   │   ├── main.jsx
-│   │   ├── App.jsx          # routes
+│   │   ├── index.css
+│   │   ├── App.jsx               # routes
 │   │   ├── pages/
-│   │   │   ├── Team.jsx     # lobby + buzzer + eliminated screen
-│   │   │   └── Host.jsx     # host dashboard
+│   │   │   ├── Team.jsx          # lobby + buzzer + eliminated screen
+│   │   │   └── Host.jsx          # host dashboard
 │   │   ├── components/
-│   │   │   └── ShapeGrid.tsx # animated hexagon background
+│   │   │   └── ShapeGrid.tsx     # animated hexagon background
 │   │   └── hooks/
-│   │       └── useWebSocket.js
-│   └── dist/                # built frontend (served by Rust)
+│   │       └── useWebSocket.js   # reconnecting WebSocket hook
+│   └── dist/                     # built frontend (served by Rust)
+├── .gitignore
 ├── README.md
-└── workflow.md
+├── Architecture.md
+├── workflow.md
+├── SKILL.md
+└── requirements.txt
 ```
 
 ## Getting started
 
 ### Prerequisites
 
-- **Rust toolchain** (rustup): https://rustup.rs
+- **Rust toolchain** (rustup, stable 1.85+): https://rustup.rs
 - **Node.js 18+**: https://nodejs.org
+- **Docker** (optional): https://docs.docker.com/get-docker/
 
 ### Setup
 
@@ -93,7 +113,7 @@ cargo build --release
 ./target/release/tune-tracker
 ```
 
-The server starts on **http://0.0.0.0:3000**.
+The server starts on **http://0.0.0.0:3000** (configurable via `PORT` env var).
 
 ### Open in browser
 
@@ -104,18 +124,30 @@ The server starts on **http://0.0.0.0:3000**.
 
 ### Development mode
 
-To run the frontend with hot reload during development:
+Run backend and frontend separately with hot reload:
 
 ```bash
+# Terminal 1: backend
+cargo run
+
+# Terminal 2: frontend (with Vite proxy to backend)
 cd frontend
-npm run dev
+npm run dev -- --host
 ```
 
-This starts Vite on `http://localhost:5173` with proxy to the Rust backend.
+Vite starts on `http://localhost:5173` and proxies `/ws/*` to the Rust backend.
+
+### Docker
+
+```bash
+docker compose up --build
+```
+
+Container listens on port 3000, accessible on all interfaces.
 
 ### Hosting on a network
 
-The server binds to `0.0.0.0:3000`, so it's accessible on your local network.
+The server binds to `0.0.0.0`, so it's accessible on your local network.
 Find your machine's local IP and share it:
 
 ```
@@ -126,13 +158,25 @@ Players connect to the team page, the host connects to `/host`.
 
 ## How it works
 
-1. **Host** opens `/host`, logs in, and controls the round (Start / Lock / Next)
+1. **Host** opens `/host`, logs in, and controls the round (Start / Lock / Reset)
 2. **Players** open `/`, create or join a team, enter a username
 3. When the host starts a round, players see the buzzer become active
 4. Players press **BUZZ** — the server records the exact order and reaction time
 5. The host sees the buzzer order in real time on the dashboard
 6. Host can eliminate teams, kick members, or reset the buzzer
 
+## Running tests
+
+```bash
+cargo test
+```
+
+8 integration tests covering team join, session token reconnection, kick,
+lock teams, round state broadcast, and 10-user concurrent buzz.
+
 ## Related docs
 
+- `Architecture.md` — data model, message protocol, state machine
 - `workflow.md` — build order and phase checklist
+- `SKILL.md` — AI assistant conventions and hard rules
+- `frontend/README.md` — frontend-specific docs

@@ -45,20 +45,28 @@ host dashboard. See `README.md` for the full feature list.
 - Round state machine: `Idle -> Active -> Locked -> (Idle on next question)`.
   Any new host control should be expressed as a transition in this machine,
   not a side-channel flag.
-- Frontend is plain HTML/CSS/JS served as static files by the Rust server —
-  no frontend framework or build step unless that's a deliberate, separate
-  decision (update `README.md` and `requirements.txt` if so).
-- Rust files currently contain `todo!()` placeholders in the core logic
-  (`AppState::new`, the WS message loops, etc.) — these are intentional gaps
-  for the project owner to fill in, not bugs. When implementing one, remove
-  only that `todo!()`, don't restructure surrounding code unless asked.
+- Frontend is React 19 + Vite 8, served by the Rust server via
+  `tower-http::ServeDir`. The Vite proxy routes `/ws/*` to the backend
+  during development.
+- Rust files are production-ready — no `todo!()` placeholders remain.
+- Integration tests use `tokio-tungstenite` and connect to real WebSocket
+  endpoints on `127.0.0.1:0` (random port). Use the `wait_for()` and
+  `drain_n()` helpers for message collection.
 
 ## Where things live
 
-- `src/state.rs` — data model (`Team`, `Round`, `BuzzerEvent`, `AppState`)
-- `src/ws/team.rs`, `src/ws/host.rs` — the two WebSocket connection loops
-- `src/anticheat.rs` — violation → warning → disqualification logic
-- `static/` — team and host frontend pages
+- `src/state.rs` — data model (`Round`, `BuzzerEvent`, `AppState`), session tokens
+- `src/ws/team.rs` — team-side WebSocket handler (join, reconnect, buzz, violations)
+- `src/ws/host.rs` — host-side WebSocket handler (start, lock, reset, kick, etc.)
+- `src/lib.rs` — `create_app()` router definition (shared by main and tests)
+- `src/main.rs` — server bootstrap, configurable `PORT` env var
+- `tests/integration.rs` — 8 integration tests
+- `frontend/src/pages/Team.jsx` — client page (lobby + buzzer + eliminated)
+- `frontend/src/pages/Host.jsx` — host dashboard (controls + buzzer order + teams)
+- `frontend/src/components/ShapeGrid.tsx` — animated hexagon background
+- `frontend/src/hooks/useWebSocket.js` — reconnecting WebSocket hook
+- `frontend/vite.config.js` — Vite config (proxy + es2018 build target)
+- `Dockerfile` — multi-stage build (node → rust → alpine)
 - `Architecture.md` — data model and message protocol, source of truth for
   any schema questions
 - `workflow.md` — the intended phase order; useful for scoping how big a

@@ -3,7 +3,7 @@
 ## Overview
 
 Team clients and the host dashboard are both plain browser pages. Both
-connect directly to a single Rust backend (`axum` + `tokio`) over WebSocket —
+connect directly to a single Rust backend (`axum` 0.7 + `tokio`) over WebSocket —
 there is no intermediary language or service in the request path. The
 backend holds one piece of shared, in-memory state that both connection
 types read from and write to.
@@ -25,42 +25,51 @@ source of truth for round status, buzzer order, and warnings.
 ## Data model
 
 ```rust
-struct Team {
-    id: TeamId,
+struct Round {
+    id: Uuid,
     name: String,
-    status: TeamStatus,       // Waiting | Answering | Disqualified
-    warning_count: u8,
+    state: RoundState,           // Idle | Active | Locked
+    buzzer_order: Vec<BuzzerEvent>,
+    started_at_ms: Option<u64>,
 }
 
 struct BuzzerEvent {
-    team_id: TeamId,
-    position: usize,          // assigned by the server, in arrival order
-    server_timestamp: DateTime<Utc>,
+    team_name: String,
+    position: usize,
+    timestamp: String,           // "HH:MM:SS:mmm"
 }
 
-struct Round {
-    id: RoundId,
-    state: RoundState,        // Idle | Active | Locked
-    buzzer_order: Vec<BuzzerEvent>,
+struct SessionInfo {
+    team_name: String,
+    username: String,
 }
 
 struct AppState {
-    teams: RwLock<HashMap<TeamId, Team>>,
+    teams: RwLock<HashMap<String, Vec<String>>>,           // team_name → usernames
+    session_tokens: RwLock<HashMap<String, SessionInfo>>, // token → session info
     current_round: RwLock<Round>,
-    tx: broadcast::Sender<ServerMessage>,   // fan-out to all connections
+    teams_locked: RwLock<bool>,
+    tx: broadcast::Sender<ServerMessage>,                 // fan-out to all connections
 }
 ```
 
 `AppState` is wrapped in an `Arc` and cloned into every request/WS handler.
 
+Teams are stored as `HashMap<String, Vec<String>>` — the key is the team name,
+the value is the list of usernames on that team. Session tokens are stored
+separately in `session_tokens` to allow reconnection without re-joining.
+
 ## Round state machine
 
 ```
-Idle ──START──▶ Active ──LOCK──▶ Locked ──NEXT QUESTION──▶ Idle (fresh round)
-                                    │
-                                 RESET (clears buzzer_order, stays Locked or
-                                        returns to Active, host's choice)
+Idle ──START──▶ Active ──LOCK──▶ Locked ──START──▶ Active
+  ▲                                                      │
+  └────────────────────RESET─────────────────────────────┘
 ```
+
+- **Idle** → no round active, buzzer disabled
+- **Active** → round running, teams can buzz
+- **Locked** → round paused, buzzer disabled, buzzes rejected
 
 The critical rule: **only a state transition to `Locked` stops new buzzer
 presses being accepted** — never a count check on `buzzer_order.len()`. This
@@ -72,7 +81,9 @@ All messages are JSON with a `type` tag.
 
 **Team → server**
 ```json
-{ "type": "join", "team_name": "Team Vibe" }
+{ "type": "join", "team_name": "Team Vibe", "action": "create" }
+{ "type": "join", "team_name": "Team Vibe", "action": "join" }
+{ "type": "join", "team_name": "Team Vibe", "action": "reconnect" }
 { "type": "buzz" }
 { "type": "violation", "kind": "tab_switch" }
 ```
@@ -81,44 +92,46 @@ All messages are JSON with a `type` tag.
 ```json
 { "type": "start" }
 { "type": "lock" }
+{ "type": "unlock" }
 { "type": "reset" }
 { "type": "next_question" }
+{ "type": "kick", "team_name": "Team Vibe" }
+{ "type": "eliminate", "team_name": "Team Vibe" }
+{ "type": "lock_teams" }
+{ "type": "unlock_teams" }
+{ "type": "set_round_name", "name": "Round 1" }
 ```
 
 **Server → all clients** (via `broadcast::Sender`)
 ```json
-{
-  "type": "buzzer_update",
-  "buzzer_order": [
-    { "position": 1, "team_name": "Team Vibe", "timestamp": "10:31:25.421" },
-    { "position": 2, "team_name": "Team Beat", "timestamp": "10:31:25.638" }
-  ]
-}
-{ "type": "round_state", "state": "Active" }
+{ "type": "username_accepted", "session_token": "abc-123", "team_name": "Team Vibe" }
+{ "type": "reconnect_accepted", "session_token": "abc-123" }
+{ "type": "join_accepted", "action": "create" }
+{ "type": "join_accepted", "action": "join" }
+{ "type": "teams_locked", "locked": true }
+{ "type": "buzzer_update", "buzzer_order": [...] }
+{ "type": "round_state", "state": "Active", "started_at_ms": 1234567890 }
+{ "type": "round_name", "name": "Round 1" }
 { "type": "team_status", "team_name": "Team Vibe", "status": "Disqualified" }
+{ "type": "violation", "team_name": "Team Vibe", "kind": "tab_switch", "warning_count": 1 }
+{ "type": "error", "message": "Team name already taken" }
 ```
 
 Keeping the server → client shape as one broadcast message type per event
 (rather than diffs) makes the host dashboard a pure "render whatever I last
 received" UI, with no client-side merge logic to get wrong.
 
-## Ordering guarantee
+## Integration tests
 
-The server timestamps a `buzz` message the instant it's received on the
-handler task — not when the client sent it, and not using any timestamp the
-client includes. Because each team's WebSocket messages are processed by
-its own connection task but all writes go through the same `RwLock`-guarded
-`buzzer_order`, the lock serializes concurrent presses into a single,
-unambiguous arrival order.
+Located in `tests/integration.rs`, using `tokio-tungstenite` for real WebSocket
+connections against a live `axum` server. Tests run on `127.0.0.1:0` (random
+available port).
 
-## Anti-cheat flow
-
-1. Browser JS on the team page listens for `visibilitychange`, `blur`,
-   `focus`, and `fullscreenchange`.
-2. On a violation, the team client sends `{"type": "violation", "kind": "..."}`
-   over its existing WS connection.
-3. The server — not the client — owns `warning_count` and the
-   disqualification threshold, so a compromised/edited client can't fake a
-   clean record.
-4. Crossing the threshold flips `Team.status` to `Disqualified` and
-   broadcasts a `team_status` update to the host.
+Tests cover:
+- Team join (create + accept)
+- Team size limit (max 6 per team)
+- Session token reconnection
+- Kick and disqualify
+- Lock teams (prevents new joins)
+- Round state broadcast
+- 10-user concurrent buzz ordering

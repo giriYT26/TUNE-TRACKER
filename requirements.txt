@@ -5,25 +5,31 @@
 # treat it as a checklist, then add the crates to Cargo.toml with `cargo add`.
 
 ## Tooling
-- Rust toolchain (stable), install via rustup
+- Rust toolchain (stable 1.85+), install via rustup
 - Cargo (comes with Rust)
+- Node.js 18+ (for frontend build)
+- Docker (optional, for containerized deployment)
 - A modern browser for testing (Chrome/Firefox) — needed for Page
   Visibility API / fullscreen API behavior during anti-cheat testing
 
 ## Core crates
 - axum            # HTTP + WebSocket server
-- tokio           # async runtime (use "full" feature during development)
+- tokio           # async runtime (use "full" feature)
 - serde           # (de)serialization, with "derive" feature
 - serde_json      # JSON message encoding for WebSocket messages
 - uuid            # team/session IDs, with "v4" feature
 - chrono          # server-side timestamps for buzzer ordering
+- tower-http      # static file serving (ServeDir)
+- tracing         # structured logging
+- tracing-subscriber  # log output formatting
+
+## Dev/test crates
+- tokio-tungstenite  # WebSocket client for integration tests
 
 ## Optional crates
 - sqlx            # if adding SQLite persistence for teams/history
-- tower-http      # static file serving, CORS, if needed
-- tracing / tracing-subscriber   # structured logging, useful once the host
-                                   # dashboard needs debugging under load
 
 ## Frontend
-- No package manager required if using plain HTML/CSS/JS served as static
-  files from the Rust server
+- React 19
+- Vite 8
+- React Router 7
