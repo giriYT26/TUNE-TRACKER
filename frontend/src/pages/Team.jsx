@@ -4,6 +4,16 @@ import ShapeGrid from '../components/ShapeGrid'
 
 const SESSION_KEY = 'teamSession'
 
+const kindLabels = {
+  tab_switch: 'Tab Switch',
+  window_blur: 'Window Blur',
+  fullscreen_exit: 'Fullscreen Exit',
+  page_close: 'Page Close',
+  navigation: 'Navigation',
+  exit_game: 'Exit Game',
+  dual_tab: 'Dual Tab',
+}
+
 function loadSession() {
   try {
     const raw = sessionStorage.getItem(SESSION_KEY)
@@ -51,6 +61,8 @@ function teamReducer(state, action) {
       return { ...state, buzzerDisabled: action.disabled }
     case 'SET_CLOCK_OFFSET':
       return { ...state, clockOffset: action.offset }
+    case 'SET_TEAM_NAME_LOCAL':
+      return { ...state, teamName: action.name }
     case 'SET_BUZZER_POSITION':
       return { ...state, buzzerPosition: action.position }
     case 'SET_ROUND_STATE':
@@ -214,6 +226,7 @@ export default function Team() {
 
   const [state, dispatch] = useReducer(teamReducer, null, getInitialState)
   const [tick, setTick] = useState(0)
+  const [warningNotice, setWarningNotice] = useState(null)
 
   // Live ticking timer — updates display every ~16ms while round is active and team hasn't buzzed
   useEffect(() => {
@@ -221,6 +234,13 @@ export default function Team() {
     const id = setInterval(() => setTick((t) => t + 1), 16)
     return () => clearInterval(id)
   }, [state.roundState, state.reactionTime, state.teamBuzzed, state.buzzerDisabled])
+
+  // Auto-dismiss warning notification after 5 seconds
+  useEffect(() => {
+    if (!warningNotice) return
+    const timer = setTimeout(() => setWarningNotice(null), 5000)
+    return () => clearTimeout(timer)
+  }, [warningNotice])
 
   // Toggle buzzer-active class on html/body/#root for fullscreen bg
   useEffect(() => {
@@ -306,6 +326,17 @@ export default function Team() {
             setJoinError('You have been kicked from the team.')
           }
           break
+        case 'violation_report':
+          if (msg.username === state.username) {
+            setWarningNotice({ kind: msg.kind, warningCount: msg.warning_count })
+          }
+          break
+        case 'team_name_changed':
+          if (msg.old_name === state.teamName) {
+            dispatch({ type: 'SET_TEAM_NAME', name: msg.new_name })
+            dispatch({ type: 'SET_TEAM_NAME_LOCAL', name: msg.new_name })
+          }
+          break
       }
     },
     [state.username, state.teamName]
@@ -388,10 +419,10 @@ export default function Team() {
   const handleLeave = () => {
     setConfirmLeave(false)
     dispatch({ type: 'CLOSE_MENU' })
+    send({ type: 'violation', kind: 'exit_game' })
     send({ type: 'leave' })
     dispatch({ type: 'RESET_SESSION' })
     setShowUsernameModal(false)
-    clearSession()
   }
 
   const handleCancelUsername = () => {
@@ -412,9 +443,7 @@ export default function Team() {
     if (!connected) return
 
     const reportViolation = (kind) => {
-      if (state.roundState === 'Active') {
-        send({ type: 'violation', kind })
-      }
+      send({ type: 'violation', kind })
     }
 
     const handleVisibility = () => {
@@ -444,7 +473,7 @@ export default function Team() {
       window.removeEventListener('beforeunload', handleBeforeUnload)
       window.removeEventListener('popstate', handlePopState)
     }
-  }, [connected, send, state.roundState])
+  }, [connected, send])
 
   return (
     <>
@@ -682,6 +711,32 @@ export default function Team() {
           cursor: pointer; transition: all 0.2s;
         }
         .eliminated-glass .elim-btn:hover { background: rgba(239,68,68,0.3); color: #fff; }
+        .warning-banner {
+          position: fixed; top: 0; left: 0; right: 0; z-index: 50;
+          padding: 0.75rem 1rem;
+          background: rgba(234,179,8,0.95); backdrop-filter: blur(8px);
+          color: #1a1a1a; font-weight: 700; font-size: 0.85rem;
+          display: flex; align-items: center; justify-content: space-between;
+          box-shadow: 0 4px 20px rgba(234,179,8,0.3);
+          animation: slideDown 0.3s ease;
+        }
+        @keyframes slideDown { from { transform: translateY(-100%); } to { transform: translateY(0); } }
+        .warning-banner .warn-close {
+          background: none; border: none; font-size: 1.2rem; cursor: pointer;
+          color: #1a1a1a; padding: 0 0.5rem; font-weight: 700;
+        }
+        .team-name-edit {
+          display: inline-flex; align-items: center; gap: 0.4rem; cursor: pointer;
+          border-bottom: 1px dashed rgba(255,255,255,0.3);
+        }
+        .team-name-edit:hover { border-bottom-color: rgba(168,139,250,0.6); }
+        .team-name-edit input {
+          background: rgba(0,0,0,0.4); border: 1px solid rgba(168,139,250,0.5);
+          border-radius: 4px; color: #f1f5f9; font-size: inherit; font-weight: inherit;
+          padding: 0.1rem 0.4rem; width: 140px; text-align: center;
+        }
+        .team-name-edit input:focus { outline: none; border-color: #a78bfa; }
+        .real-name-hint { color: #64748b; font-size: 0.75rem; margin-top: 0.25rem; }
         @media (max-width: 480px) {
           .team-root { padding: 1rem; }
           .team-title { font-size: 1.5rem; }
@@ -738,17 +793,17 @@ export default function Team() {
                 <p style={{ color: '#f87171', fontSize: '0.8rem', margin: '0 0 0.5rem 0' }}>{joinError}</p>
               )}
 
-              <div className="lobby-section-title">TEAMS ({state.teamList.length})</div>
-              {state.teamList.length > 0 && (
+              <div className="lobby-section-title">TEAMS ({state.teamList.filter(t => t.size > 0).length})</div>
+              {state.teamList.filter(t => t.size > 0).length > 0 && (
                 <input type="text" className="lobby-search" placeholder="Search teams..."
                   value={teamSearch} onChange={(e) => setTeamSearch(e.target.value)} />
               )}
               <div className="lobby-team-list">
-                {state.teamList.length === 0 ? (
+                {state.teamList.filter(t => t.size > 0).length === 0 ? (
                   <div className="lobby-empty">No teams yet</div>
                 ) : (() => {
                   const filtered = state.teamList.filter((t) =>
-                    t.name.toLowerCase().includes(teamSearch.toLowerCase())
+                    t.size > 0 && t.name.toLowerCase().includes(teamSearch.toLowerCase())
                   )
                   if (filtered.length === 0) {
                     return <div className="lobby-empty">No matching teams</div>
@@ -784,9 +839,39 @@ export default function Team() {
         {/* Screen 2: Buzzer */}
         {state.screen === 'buzzer' && (
           <div className="buzzer-bg">
+            {warningNotice && (
+              <div className="warning-banner">
+                <span>⚠ Warning: {kindLabels[warningNotice.kind] || warningNotice.kind} ({warningNotice.warningCount})</span>
+                <button className="warn-close" onClick={() => setWarningNotice(null)}>✕</button>
+              </div>
+            )}
             <div className="buzzer-glass">
               <button className="menu-toggle" onClick={() => dispatch({ type: 'TOGGLE_MENU' })}>☰</button>
-              <h2 className="team-title">{state.teamName}</h2>
+              {!state.teamsLocked ? (
+                <h2 className="team-title team-name-edit" onClick={(e) => e.currentTarget.querySelector('input')?.focus()}>
+                  {state.teamName}
+                  <input type="text" value={state.teamName}
+                    onChange={(e) => dispatch({ type: 'SET_TEAM_NAME_LOCAL', name: e.target.value })}
+                    onBlur={(e) => {
+                      const newName = e.target.value.trim()
+                      if (newName && newName !== state.teamName) {
+                        send({ type: 'set_team_name', team_name: state.teamName, new_name: newName })
+                      } else {
+                        dispatch({ type: 'SET_TEAM_NAME_LOCAL', name: state.teamName })
+                      }
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') e.target.blur()
+                      if (e.key === 'Escape') {
+                        dispatch({ type: 'SET_TEAM_NAME_LOCAL', name: state.teamName })
+                        e.target.blur()
+                      }
+                    }}
+                    onClick={(e) => e.stopPropagation()} />
+                </h2>
+              ) : (
+                <h2 className="team-title">{state.teamName}</h2>
+              )}
 
               <div className="info-row">
                 <span className="info-label">Round: <span className="info-value">{state.roundName}</span></span>
@@ -891,7 +976,8 @@ export default function Team() {
           <div className="username-modal" onClick={(e) => e.stopPropagation()}>
             <h3>{state.teamName}</h3>
             <p className="sub-label">Enter Username</p>
-            <input type="text" placeholder="Username" value={state.username}
+            <p className="real-name-hint">Enter your real name (no pseudonyms)</p>
+            <input type="text" placeholder="Your real name" value={state.username}
               onChange={(e) => { dispatch({ type: 'SET_USERNAME', name: e.target.value }); setJoinError('') }}
               onKeyDown={(e) => e.key === 'Enter' && handleSubmitUsername()} autoFocus />
             {joinError && <p className="modal-error">{joinError}</p>}

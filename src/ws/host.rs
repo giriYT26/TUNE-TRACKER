@@ -129,6 +129,9 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
                 ClientMessage::UnlockTeams => {
                     state2.unlock_teams().await;
                 }
+                ClientMessage::RemoveTeam { team_name } => {
+                    state2.remove_team(team_name).await;
+                }
                 _ => {}
             }
         }

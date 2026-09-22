@@ -68,6 +68,8 @@ const kindLabels = {
   fullscreen_exit: 'Fullscreen Exit',
   page_close: 'Page Close',
   navigation: 'Navigation',
+  exit_game: 'Exit Game',
+  dual_tab: 'Dual Tab',
 }
 
 export default function Host() {
@@ -77,6 +79,7 @@ export default function Host() {
   const [confirmClear, setConfirmClear] = useState(false)
   const [confirmKick, setConfirmKick] = useState(null)
   const [confirmEliminate, setConfirmEliminate] = useState(null)
+  const [confirmRemoveTeam, setConfirmRemoveTeam] = useState(null)
 
   const [state, dispatch] = useReducer(hostReducer, {
     buzzerOrder: [],
@@ -144,6 +147,11 @@ export default function Host() {
   const handleEliminate = (teamName) => {
     setConfirmEliminate(null)
     send({ type: 'disqualify', team_name: teamName, username: null })
+  }
+
+  const handleRemoveTeam = (teamName) => {
+    setConfirmRemoveTeam(null)
+    send({ type: 'remove_team', team_name: teamName })
   }
 
   const handleReset = () => {
@@ -684,6 +692,9 @@ export default function Host() {
                     <div className="team-card-header">
                       <span className="team-card-name">{name}</span>
                       <div className="team-card-actions">
+                        {usernames.length === 0 && (
+                          <button onClick={() => setConfirmRemoveTeam({ teamName: name })} className="dq-btn" style={{ background: 'rgba(100,116,139,0.4)', borderColor: 'rgba(100,116,139,0.6)' }}>Remove</button>
+                        )}
                         <button onClick={() => setConfirmEliminate({ teamName: name })} className="dq-btn">Eliminate</button>
                       </div>
                     </div>
@@ -782,6 +793,21 @@ export default function Host() {
             <div className="confirm-actions">
               <button className="confirm-yes" onClick={() => handleEliminate(confirmEliminate.teamName)}>Eliminate</button>
               <button className="confirm-no" onClick={() => setConfirmEliminate(null)}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Remove Team Confirmation */}
+      {confirmRemoveTeam && (
+        <div className="confirm-overlay" onClick={() => setConfirmRemoveTeam(null)}>
+          <div className="confirm-dialog" onClick={(e) => e.stopPropagation()}>
+            <div className="warn-icon">🗑️</div>
+            <p>Remove team {confirmRemoveTeam.teamName}?</p>
+            <div className="sub">This empty team will be permanently deleted.</div>
+            <div className="confirm-actions">
+              <button className="confirm-yes" onClick={() => handleRemoveTeam(confirmRemoveTeam.teamName)}>Remove</button>
+              <button className="confirm-no" onClick={() => setConfirmRemoveTeam(null)}>Cancel</button>
             </div>
           </div>
         </div>

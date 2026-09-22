@@ -3,7 +3,7 @@ use std::collections::{HashMap, HashSet};
 use tokio::sync::{broadcast, RwLock};
 use uuid::Uuid;
 
-const MAX_TEAM_SIZE: usize = 4;
+const MAX_TEAM_SIZE: usize = 1;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum TeamStatus {
@@ -54,6 +54,7 @@ pub enum ServerMessage {
     ViolationReport { team_name: String, username: String, kind: String, warning_count: u8 },
     Kicked { team_name: String, username: String },
     TeamLock { locked: bool },
+    TeamNameChanged { old_name: String, new_name: String },
     UsernameAccepted { session_token: String, round_name: String },
     ReconnectAccepted { session_token: String, team_name: String, username: String, round_name: String },
 }
@@ -77,6 +78,8 @@ pub enum ClientMessage {
     ResetViolations,
     LockTeams,
     UnlockTeams,
+    RemoveTeam { team_name: String },
+    SetTeamName { team_name: String, new_name: String },
     Leave,
 }
 
@@ -89,6 +92,7 @@ pub struct AppState {
     pub disqualified_users: RwLock<HashSet<String>>,
     pub teams_locked: RwLock<bool>,
     pub session_tokens: RwLock<HashMap<String, SessionInfo>>,
+    pub active_connections: RwLock<HashMap<String, usize>>,
 }
 
 impl AppState {
@@ -109,6 +113,7 @@ impl AppState {
             disqualified_users: RwLock::new(HashSet::new()),
             teams_locked: RwLock::new(false),
             session_tokens: RwLock::new(HashMap::new()),
+            active_connections: RwLock::new(HashMap::new()),
         }
     }
 
@@ -149,7 +154,7 @@ impl AppState {
         drop(teams);
 
         if member_count >= MAX_TEAM_SIZE {
-            return Err("Team is full (max 4 members)".to_string());
+            return Err("Team is full (1 member per team)".to_string());
         }
 
         let mut users = self.connected_users.write().await;
@@ -418,12 +423,7 @@ impl AppState {
             let mut teams = self.connected_teams.write().await;
             if let Some(members) = teams.get_mut(&team_name) {
                 members.retain(|u| u != username);
-                if members.is_empty() {
-                    teams.remove(&team_name);
-                    Vec::new()
-                } else {
-                    members.clone()
-                }
+                members.clone()
             } else {
                 Vec::new()
             }
@@ -439,5 +439,52 @@ impl AppState {
             team_name,
             usernames: updated_usernames,
         });
+    }
+
+    pub async fn remove_team(&self, team_name: String) {
+        let mut teams = self.connected_teams.write().await;
+        teams.remove(&team_name);
+        tracing::info!(team = %team_name, action = "team_removed");
+    }
+
+    pub async fn rename_team(&self, team_name: String, new_name: String) -> Result<(), String> {
+        let teams = self.connected_teams.read().await;
+        if teams.contains_key(&new_name) {
+            return Err("Team name already taken".to_string());
+        }
+        if !teams.contains_key(&team_name) {
+            return Err("Team not found".to_string());
+        }
+        drop(teams);
+
+        let mut teams = self.connected_teams.write().await;
+        if let Some(members) = teams.remove(&team_name) {
+            teams.insert(new_name.clone(), members);
+        }
+        drop(teams);
+
+        let _ = self.tx.send(ServerMessage::TeamNameChanged {
+            old_name: team_name,
+            new_name,
+        });
+        Ok(())
+    }
+
+    pub async fn track_connection(&self, username: &str) -> bool {
+        let mut conns = self.active_connections.write().await;
+        let count = conns.entry(username.to_string()).or_insert(0);
+        *count += 1;
+        *count > 1
+    }
+
+    pub async fn untrack_connection(&self, username: &str) {
+        let mut conns = self.active_connections.write().await;
+        if let Some(count) = conns.get_mut(username) {
+            if *count > 1 {
+                *count -= 1;
+            } else {
+                conns.remove(username);
+            }
+        }
     }
 }

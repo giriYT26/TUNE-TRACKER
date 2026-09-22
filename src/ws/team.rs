@@ -25,7 +25,7 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
     let team_data: Vec<_> = teams
         .iter()
         .map(|(name, members)| {
-            serde_json::json!({ "name": name, "size": members.len(), "limit": 4 })
+            serde_json::json!({ "name": name, "size": members.len(), "limit": 1 })
         })
         .collect();
     drop(teams);
@@ -116,6 +116,12 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
                                     }
                                 }
 
+                                // Track connection for dual-tab detection
+                                let is_dual = state.track_connection(&info.username).await;
+                                if is_dual {
+                                    state.handle_violation(info.username.clone(), "dual_tab".into()).await;
+                                }
+
                                 // Broadcast updated team list
                                 let teams_snapshot = state.connected_teams.read().await;
                                 for (t_name, t_members) in teams_snapshot.iter() {
@@ -183,6 +189,13 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
                         match state.add_username(team_name.clone().unwrap(), name.clone()).await {
                             Ok(session_token) => {
                                 username = Some(name.clone());
+
+                                // Track connection for dual-tab detection
+                                let is_dual = state.track_connection(&name).await;
+                                if is_dual {
+                                    state.handle_violation(name.clone(), "dual_tab".into()).await;
+                                }
+
                                 let round = state.current_round.read().await;
                                 let reply = ServerMessage::UsernameAccepted {
                                     session_token,
@@ -208,7 +221,7 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
                         let team_data: Vec<_> = teams
                             .iter()
                             .map(|(name, members)| {
-                                serde_json::json!({ "name": name, "size": members.len(), "limit": 4 })
+                                serde_json::json!({ "name": name, "size": members.len(), "limit": 1 })
                             })
                             .collect();
                         let _ = sender.send(Message::Text(
@@ -223,6 +236,20 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
                     ClientMessage::Violation { kind } => {
                         if let Some(ref uname) = username {
                             state.handle_violation(uname.clone(), kind).await;
+                        }
+                    }
+                    ClientMessage::SetTeamName { team_name: ref tname, ref new_name } => {
+                        if let Some(ref _uname) = username {
+                            if Some(tname.as_str()) == team_name.as_deref() {
+                                match state.rename_team(tname.clone(), new_name.clone()).await {
+                                    Ok(()) => {}
+                                    Err(e) => {
+                                        let _ = sender.send(Message::Text(
+                                            serde_json::json!({ "type": "error", "message": e }).to_string().into(),
+                                        )).await;
+                                    }
+                                }
+                            }
                         }
                     }
                     ClientMessage::Leave => {
@@ -248,8 +275,9 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
         }
     }
 
-    // On disconnect, remove user from connected maps
+    // On disconnect, remove user from connected maps and untrack connection
     if let Some(ref uname) = username {
+        state.untrack_connection(uname).await;
         state.remove_user_with_broadcast(uname).await;
         tracing::info!(
             username = %uname,
