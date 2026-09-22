@@ -66,7 +66,7 @@ pub enum ClientMessage {
     Username { username: String },
     Reconnect { session_token: String },
     GetTeams,
-    Buzz { reaction_time_ms: Option<u64> },
+    Buzz { #[serde(default)] reaction_time_ms: Option<u64> },
     Violation { kind: String },
     Start,
     Lock,
