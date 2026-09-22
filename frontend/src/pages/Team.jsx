@@ -1,6 +1,7 @@
 import { useState, useEffect, useReducer, useCallback, useRef } from 'react'
 import { useWebSocket } from '../hooks/useWebSocket'
 import ShapeGrid from '../components/ShapeGrid'
+import buzzerSound from '../assets/buzzer_sound.mp4'
 
 const SESSION_KEY = 'teamSession'
 const WARNING_SEEN_KEY = 'warningSeen'
@@ -224,6 +225,15 @@ export default function Team() {
   const [warningNotice, setWarningNotice] = useState(null)
   const [renamingTeam, setRenamingTeam] = useState(false)
   const [renameValue, setRenameValue] = useState('')
+  const buzzerAudioRef = useRef(null)
+
+  // Preload buzzer sound once
+  useEffect(() => {
+    const audio = new Audio(buzzerSound)
+    audio.preload = 'auto'
+    audio.load()
+    buzzerAudioRef.current = audio
+  }, [])
 
   // Live ticking timer — updates display every ~16ms while round is active and team hasn't buzzed
   useEffect(() => {
@@ -415,6 +425,10 @@ export default function Team() {
   }
 
   const handleBuzz = () => {
+    if (buzzerAudioRef.current) {
+      buzzerAudioRef.current.currentTime = 0
+      buzzerAudioRef.current.play()
+    }
     send({ type: 'buzz' })
   }
 
