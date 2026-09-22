@@ -47,7 +47,7 @@ pub struct SessionInfo {
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ServerMessage {
     BuzzerUpdate { buzzer_order: Vec<BuzzerEvent> },
-    RoundState { state: RoundState, started_at_ms: Option<u64> },
+    RoundState { state: RoundState, started_at_ms: Option<u64>, server_now: u64 },
     RoundName { name: String },
     TeamStatus { team_name: String, username: String, status: TeamStatus, warning_count: u8 },
     TeamJoined { team_name: String, usernames: Vec<String> },
@@ -202,7 +202,7 @@ impl AppState {
         }
     }
 
-    pub async fn add_buzzer_event(&self, username: String, reaction_time_ms: Option<u64>) -> Option<BuzzerEvent> {
+    pub async fn add_buzzer_event(&self, username: String) -> Option<BuzzerEvent> {
         let disqualified = self.disqualified_users.read().await;
         if disqualified.contains(&username) {
             return None;
@@ -220,6 +220,8 @@ impl AppState {
             return None;
         }
         let position = round.buzzer_order.len() + 1;
+        let now_ms = chrono::Utc::now().timestamp_millis() as u64;
+        let reaction_time_ms = round.started_at_ms.map(|start| now_ms.saturating_sub(start));
         let event = BuzzerEvent {
             team_name: team_name.clone(),
             username: username.clone(),
@@ -246,14 +248,15 @@ impl AppState {
 
     pub async fn set_round_state(&self, state: RoundState) {
         let mut round = self.current_round.write().await;
-        if state == RoundState::Active {
+        let current_state = round.state.clone();
+        if state == RoundState::Active && current_state != RoundState::Locked {
             round.started_at_ms = Some(chrono::Utc::now().timestamp_millis() as u64);
         } else if state == RoundState::Idle {
             round.started_at_ms = None;
         }
         let started_at_ms = round.started_at_ms;
         round.state = state.clone();
-        let _ = self.tx.send(ServerMessage::RoundState { state, started_at_ms });
+        let _ = self.tx.send(ServerMessage::RoundState { state, started_at_ms, server_now: chrono::Utc::now().timestamp_millis() as u64 });
     }
 
     pub async fn set_round_name(&self, name: String) {
@@ -274,6 +277,7 @@ impl AppState {
         let _ = self.tx.send(ServerMessage::RoundState {
             state: RoundState::Idle,
             started_at_ms: None,
+            server_now: chrono::Utc::now().timestamp_millis() as u64,
         });
         tracing::info!(action = "buzzer_reset");
     }
@@ -291,6 +295,7 @@ impl AppState {
         let _ = self.tx.send(ServerMessage::RoundState {
             state: RoundState::Active,
             started_at_ms,
+            server_now: chrono::Utc::now().timestamp_millis() as u64,
         });
         tracing::info!(action = "next_question");
     }
@@ -347,7 +352,7 @@ impl AppState {
         {
             let mut dq = self.disqualified_users.write().await;
             for u in &users_to_dq {
-                dq.remove(u);
+                dq.insert(u.clone());
             }
         }
 

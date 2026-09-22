@@ -45,6 +45,7 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
                 serde_json::to_string(&ServerMessage::RoundState {
                     state: round.state.clone(),
                     started_at_ms: round.started_at_ms,
+                    server_now: chrono::Utc::now().timestamp_millis() as u64,
                 })
                 .unwrap()
                 .into(),
@@ -214,9 +215,9 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
                             serde_json::json!({ "type": "team_list", "teams": team_data }).to_string().into(),
                         )).await;
                     }
-                    ClientMessage::Buzz { reaction_time_ms } => {
+                    ClientMessage::Buzz { .. } => {
                         if let Some(ref uname) = username {
-                            state.add_buzzer_event(uname.clone(), reaction_time_ms).await;
+                            state.add_buzzer_event(uname.clone()).await;
                         }
                     }
                     ClientMessage::Violation { kind } => {
@@ -230,10 +231,18 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
                     _ => {}
                 }
             }
-            Ok(msg) = rx.recv() => {
-                let text = serde_json::to_string(&msg).unwrap();
-                if sender.send(Message::Text(text.into())).await.is_err() {
-                    break;
+            msg = rx.recv() => {
+                match msg {
+                    Ok(msg) => {
+                        let text = serde_json::to_string(&msg).unwrap();
+                        if sender.send(Message::Text(text.into())).await.is_err() {
+                            break;
+                        }
+                    }
+                    Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
+                        tracing::warn!(component = "team_ws", action = "broadcast_lagged", skipped = n);
+                    }
+                    Err(_) => break,
                 }
             }
         }

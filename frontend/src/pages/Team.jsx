@@ -26,6 +26,7 @@ function clearSession() {
 }
 
 function formatReactionTime(ms) {
+  if (ms < 0) ms = 0
   const min = Math.floor(ms / 60000)
   const sec = Math.floor((ms % 60000) / 1000)
   const msPart = ms % 1000
@@ -48,6 +49,8 @@ function teamReducer(state, action) {
       return { ...state, screen: 'eliminated' }
     case 'SET_BUZZER_DISABLED':
       return { ...state, buzzerDisabled: action.disabled }
+    case 'SET_CLOCK_OFFSET':
+      return { ...state, clockOffset: action.offset }
     case 'SET_BUZZER_POSITION':
       return { ...state, buzzerPosition: action.position }
     case 'SET_ROUND_STATE':
@@ -72,7 +75,7 @@ function teamReducer(state, action) {
       )
       const nowBuzzed = myEvent ? true : state.teamBuzzed
       const buzzTime = (nowBuzzed && !state.teamBuzzed)
-        ? (myEvent?.reaction_time_ms ?? (state.roundStartTime ? Date.now() - state.roundStartTime : 0))
+        ? (myEvent?.reaction_time_ms ?? (state.roundStartTime ? Math.max(0, (Date.now() + state.clockOffset) - state.roundStartTime) : 0))
         : state.teamBuzzTime
       return {
         ...state,
@@ -105,6 +108,7 @@ function teamReducer(state, action) {
           ...state,
           roundState: action.state,
           roundStartTime: action.startedAtMs,
+          buzzerDisabled: false,
         }
       }
       return {
@@ -112,7 +116,7 @@ function teamReducer(state, action) {
         roundState: action.state,
         buzzerDisabled: action.state !== 'Active',
         buzzerPosition: action.state === 'Active' ? null : state.buzzerPosition,
-        roundStartTime: action.state === 'Active' ? action.startedAtMs : null,
+        roundStartTime: action.state === 'Idle' ? null : state.roundStartTime,
       }
     }
     case 'RESET_SESSION':
@@ -136,6 +140,7 @@ function teamReducer(state, action) {
         menuOpen: false,
         teamsLocked: state.teamsLocked,
         sessionToken: null,
+        clockOffset: 0,
       }
     default:
       return state
@@ -165,6 +170,7 @@ function getInitialState() {
       menuOpen: false,
       teamsLocked: false,
       sessionToken: saved.sessionToken || null,
+      clockOffset: 0,
     }
   }
   return {
@@ -187,6 +193,7 @@ function getInitialState() {
     menuOpen: false,
     teamsLocked: false,
     sessionToken: null,
+    clockOffset: 0,
   }
 }
 
@@ -208,10 +215,10 @@ export default function Team() {
   const [state, dispatch] = useReducer(teamReducer, null, getInitialState)
   const [tick, setTick] = useState(0)
 
-  // Live ticking timer — updates display every 50ms while round is active and team hasn't buzzed
+  // Live ticking timer — updates display every ~16ms while round is active and team hasn't buzzed
   useEffect(() => {
     if (state.roundState !== 'Active' || state.reactionTime !== null || state.teamBuzzed || state.buzzerDisabled) return
-    const id = setInterval(() => setTick((t) => t + 1), 50)
+    const id = setInterval(() => setTick((t) => t + 1), 16)
     return () => clearInterval(id)
   }, [state.roundState, state.reactionTime, state.teamBuzzed, state.buzzerDisabled])
 
@@ -269,6 +276,10 @@ export default function Team() {
           })
           break
         case 'round_state':
+          if (msg.state === 'Active' && msg.started_at_ms != null && msg.server_now != null) {
+            const offset = msg.server_now - Date.now()
+            dispatch({ type: 'SET_CLOCK_OFFSET', offset })
+          }
           dispatch({ type: 'ROUND_STATE_CHANGE', state: msg.state, startedAtMs: msg.started_at_ms })
           break
         case 'round_name':
@@ -368,7 +379,7 @@ export default function Team() {
   }
 
   const handleBuzz = () => {
-    const reactionTime = state.roundStartTime ? Date.now() - state.roundStartTime : 0
+    const reactionTime = state.roundStartTime ? Math.max(0, (Date.now() + state.clockOffset) - state.roundStartTime) : 0
     dispatch({ type: 'SET_REACTION_TIME', time: reactionTime })
     send({ type: 'buzz', reaction_time_ms: reactionTime })
     dispatch({ type: 'SET_BUZZER_DISABLED', disabled: true })
@@ -401,7 +412,9 @@ export default function Team() {
     if (!connected) return
 
     const reportViolation = (kind) => {
-      send({ type: 'violation', kind })
+      if (state.roundState === 'Active') {
+        send({ type: 'violation', kind })
+      }
     }
 
     const handleVisibility = () => {
@@ -431,7 +444,7 @@ export default function Team() {
       window.removeEventListener('beforeunload', handleBeforeUnload)
       window.removeEventListener('popstate', handlePopState)
     }
-  }, [connected, send])
+  }, [connected, send, state.roundState])
 
   return (
     <>
@@ -796,7 +809,7 @@ export default function Team() {
                 : state.teamBuzzed && state.teamBuzzTime !== null
                   ? formatReactionTime(state.teamBuzzTime)
                   : state.roundStartTime
-                    ? formatReactionTime(Date.now() - state.roundStartTime)
+                    ? formatReactionTime(Math.max(0, (Date.now() + state.clockOffset) - state.roundStartTime))
                     : '00:00:000'}
             </div>
 

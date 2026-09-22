@@ -31,6 +31,7 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
         let state_msg = crate::state::ServerMessage::RoundState {
             state: round.state.clone(),
             started_at_ms: round.started_at_ms,
+            server_now: chrono::Utc::now().timestamp_millis() as u64,
         };
         let _ = sender
             .send(Message::Text(serde_json::to_string(&state_msg).unwrap().into()))
@@ -64,14 +65,22 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
     }
 
     let mut send_task = tokio::spawn(async move {
-        while let Ok(msg) = rx.recv().await {
-            let text = serde_json::to_string(&msg).unwrap();
-            if sender
-                .send(Message::Text(text.into()))
-                .await
-                .is_err()
-            {
-                break;
+        loop {
+            match rx.recv().await {
+                Ok(msg) => {
+                    let text = serde_json::to_string(&msg).unwrap();
+                    if sender
+                        .send(Message::Text(text.into()))
+                        .await
+                        .is_err()
+                    {
+                        break;
+                    }
+                }
+                Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
+                    tracing::warn!(component = "host_ws", action = "broadcast_lagged", skipped = n);
+                }
+                Err(_) => break,
             }
         }
     });
