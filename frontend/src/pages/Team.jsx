@@ -88,7 +88,7 @@ function teamReducer(state, action) {
       const myEvent = action.buzzerOrder.find(
         (e) => e.team_name === state.teamName
       )
-      const nowBuzzed = myEvent ? true : state.teamBuzzed
+      const nowBuzzed = !!myEvent
       const buzzTime = (nowBuzzed && !state.teamBuzzed)
         ? (myEvent?.reaction_time_ms ?? (state.roundStartTime ? Math.max(0, (Date.now() + state.clockOffset) - state.roundStartTime) : 0))
         : state.teamBuzzTime
@@ -104,7 +104,7 @@ function teamReducer(state, action) {
     }
     case 'ROUND_STATE_CHANGE': {
       const isNewRound = action.state === 'Active' && action.startedAtMs !== state.roundStartTime
-      if (isNewRound) {
+      if (isNewRound || (action.state === 'Active' && state.roundState !== 'Active')) {
         return {
           ...state,
           roundState: action.state,
@@ -116,14 +116,6 @@ function teamReducer(state, action) {
           teamBuzzed: false,
           teamBuzzTime: null,
           buzzerOrder: [],
-        }
-      }
-      if (action.state === 'Active' && !isNewRound) {
-        return {
-          ...state,
-          roundState: action.state,
-          roundStartTime: action.startedAtMs,
-          buzzerDisabled: false,
         }
       }
       return {
@@ -418,10 +410,7 @@ export default function Team() {
   }
 
   const handleBuzz = () => {
-    const reactionTime = state.roundStartTime ? Math.max(0, (Date.now() + state.clockOffset) - state.roundStartTime) : 0
-    dispatch({ type: 'SET_REACTION_TIME', time: reactionTime })
-    send({ type: 'buzz', reaction_time_ms: reactionTime })
-    dispatch({ type: 'SET_BUZZER_DISABLED', disabled: true })
+    send({ type: 'buzz' })
   }
 
   const handleLeave = () => {
