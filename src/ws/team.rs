@@ -93,7 +93,10 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
 
                 let parsed: ClientMessage = match serde_json::from_str(&text) {
                     Ok(m) => m,
-                    Err(_) => continue,
+                    Err(e) => {
+                        tracing::warn!(action = "parse_error", error = %e, raw = %text);
+                        continue;
+                    }
                 };
 
                 match parsed {
@@ -157,7 +160,7 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
                             }
                             None => {
                                 let _ = sender.send(Message::Text(
-                                    serde_json::json!({ "type": "error", "message": "Session expired. Please rejoin." })
+                                    serde_json::json!({ "type": "session_expired", "message": "Session expired. Please rejoin." })
                                         .to_string().into(),
                                 )).await;
                             }
@@ -230,7 +233,10 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
                     }
                     ClientMessage::Buzz { .. } => {
                         if let Some(ref uname) = username {
+                            tracing::info!(username = %uname, action = "buzz_received");
                             state.add_buzzer_event(uname.clone()).await;
+                        } else {
+                            tracing::warn!(action = "buzz_dropped", reason = "no_username");
                         }
                     }
                     ClientMessage::Violation { kind } => {

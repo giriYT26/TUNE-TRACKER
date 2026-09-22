@@ -277,6 +277,11 @@ export default function Team() {
         case 'error':
           setJoinError(msg.message)
           break
+        case 'session_expired':
+          dispatch({ type: 'RESET_SESSION' })
+          clearSession()
+          setJoinError('Session expired. Please rejoin.')
+          break
         case 'team_list':
           dispatch({ type: 'SET_TEAM_LIST', teams: msg.teams || [] })
           break
