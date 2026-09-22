@@ -713,7 +713,7 @@ export default function Team() {
           box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
           text-align: center;
         }
-        .eliminated-glass .elim-icon { font-size: 4rem; margin-bottom: 0.75rem; }
+        .eliminated-glass .elim-icon { font-size: 4rem; margin-bottom: 1.5rem; }
         .eliminated-glass .elim-title {
           color: #f87171; font-size: 1.8rem; font-weight: 800;
           text-shadow: 0 0 20px rgba(239,68,68,0.5); margin: 0 0 0.5rem 0;
