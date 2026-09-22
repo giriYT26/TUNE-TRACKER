@@ -3,6 +3,9 @@ import { useWebSocket } from '../hooks/useWebSocket'
 import ShapeGrid from '../components/ShapeGrid'
 
 const SESSION_KEY = 'teamSession'
+const WARNING_SEEN_KEY = 'warningSeen'
+
+const extensionKinds = ['tab_switch', 'window_blur', 'fullscreen_exit', 'page_close', 'navigation']
 
 const kindLabels = {
   tab_switch: 'Tab Switch',
@@ -227,6 +230,8 @@ export default function Team() {
   const [state, dispatch] = useReducer(teamReducer, null, getInitialState)
   const [tick, setTick] = useState(0)
   const [warningNotice, setWarningNotice] = useState(null)
+  const [renamingTeam, setRenamingTeam] = useState(false)
+  const [renameValue, setRenameValue] = useState('')
 
   // Live ticking timer — updates display every ~16ms while round is active and team hasn't buzzed
   useEffect(() => {
@@ -328,7 +333,10 @@ export default function Team() {
           break
         case 'violation_report':
           if (msg.username === state.username) {
-            setWarningNotice({ kind: msg.kind, warningCount: msg.warning_count })
+            if (extensionKinds.includes(msg.kind) && !localStorage.getItem(WARNING_SEEN_KEY)) {
+              setWarningNotice({ kind: msg.kind, warningCount: msg.warning_count })
+              localStorage.setItem(WARNING_SEEN_KEY, '1')
+            }
           }
           break
         case 'team_name_changed':
@@ -423,6 +431,7 @@ export default function Team() {
     send({ type: 'leave' })
     dispatch({ type: 'RESET_SESSION' })
     setShowUsernameModal(false)
+    clearSession()
   }
 
   const handleCancelUsername = () => {
@@ -725,17 +734,6 @@ export default function Team() {
           background: none; border: none; font-size: 1.2rem; cursor: pointer;
           color: #1a1a1a; padding: 0 0.5rem; font-weight: 700;
         }
-        .team-name-edit {
-          display: inline-flex; align-items: center; gap: 0.4rem; cursor: pointer;
-          border-bottom: 1px dashed rgba(255,255,255,0.3);
-        }
-        .team-name-edit:hover { border-bottom-color: rgba(168,139,250,0.6); }
-        .team-name-edit input {
-          background: rgba(0,0,0,0.4); border: 1px solid rgba(168,139,250,0.5);
-          border-radius: 4px; color: #f1f5f9; font-size: inherit; font-weight: inherit;
-          padding: 0.1rem 0.4rem; width: 140px; text-align: center;
-        }
-        .team-name-edit input:focus { outline: none; border-color: #a78bfa; }
         .real-name-hint { color: #64748b; font-size: 0.75rem; margin-top: 0.25rem; }
         @media (max-width: 480px) {
           .team-root { padding: 1rem; }
@@ -847,31 +845,7 @@ export default function Team() {
             )}
             <div className="buzzer-glass">
               <button className="menu-toggle" onClick={() => dispatch({ type: 'TOGGLE_MENU' })}>☰</button>
-              {!state.teamsLocked ? (
-                <h2 className="team-title team-name-edit" onClick={(e) => e.currentTarget.querySelector('input')?.focus()}>
-                  {state.teamName}
-                  <input type="text" value={state.teamName}
-                    onChange={(e) => dispatch({ type: 'SET_TEAM_NAME_LOCAL', name: e.target.value })}
-                    onBlur={(e) => {
-                      const newName = e.target.value.trim()
-                      if (newName && newName !== state.teamName) {
-                        send({ type: 'set_team_name', team_name: state.teamName, new_name: newName })
-                      } else {
-                        dispatch({ type: 'SET_TEAM_NAME_LOCAL', name: state.teamName })
-                      }
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') e.target.blur()
-                      if (e.key === 'Escape') {
-                        dispatch({ type: 'SET_TEAM_NAME_LOCAL', name: state.teamName })
-                        e.target.blur()
-                      }
-                    }}
-                    onClick={(e) => e.stopPropagation()} />
-                </h2>
-              ) : (
-                <h2 className="team-title">{state.teamName}</h2>
-              )}
+              <h2 className="team-title">{state.teamName}</h2>
 
               <div className="info-row">
                 <span className="info-label">Round: <span className="info-value">{state.roundName}</span></span>
@@ -926,7 +900,7 @@ export default function Team() {
                   {/* Team Members */}
                   {state.teamMembers.length > 0 && (
                     <div className="side-menu-section">
-                      <div className="side-menu-section-title">Team ({state.teamMembers.length}/4)</div>
+                      <div className="side-menu-section-title">Team ({state.teamMembers.length}/1)</div>
                       {state.teamMembers.map((m) => (
                         <div key={m} className={`menu-member-item${m === state.username ? ' is-me' : ''}`}>
                           {m === state.username ? `${m} (you)` : m}
@@ -935,9 +909,42 @@ export default function Team() {
                     </div>
                   )}
 
+                  {/* Rename Team */}
+                  {!state.teamsLocked && (
+                    <div className="side-menu-section">
+                      {!renamingTeam ? (
+                        <button className="menu-leave-btn" onClick={() => { setRenamingTeam(true); setRenameValue(state.teamName) }}>Rename Team</button>
+                      ) : (
+                        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                          <input type="text" value={renameValue}
+                            onChange={(e) => setRenameValue(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                const newName = renameValue.trim()
+                                if (newName && newName !== state.teamName) {
+                                  send({ type: 'set_team_name', team_name: state.teamName, new_name: newName })
+                                }
+                                setRenamingTeam(false)
+                              }
+                              if (e.key === 'Escape') setRenamingTeam(false)
+                            }}
+                            autoFocus
+                            style={{ flex: 1, padding: '0.4rem 0.6rem', background: 'rgba(0,0,0,0.4)', border: '1px solid rgba(168,139,250,0.5)', borderRadius: '6px', color: '#f1f5f9', fontSize: '0.85rem' }} />
+                          <button onClick={() => {
+                            const newName = renameValue.trim()
+                            if (newName && newName !== state.teamName) {
+                              send({ type: 'set_team_name', team_name: state.teamName, new_name: newName })
+                            }
+                            setRenamingTeam(false)
+                          }} style={{ padding: '0.4rem 0.8rem', background: 'rgba(168,139,250,0.2)', border: '1px solid rgba(168,139,250,0.4)', borderRadius: '6px', color: '#c4b5fd', fontSize: '0.8rem', cursor: 'pointer' }}>Save</button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   {/* Leave Team */}
                   <div className="side-menu-section">
-                    <button className="menu-leave-btn" onClick={() => { dispatch({ type: 'CLOSE_MENU' }); setConfirmLeave(true) }}>Leave Team</button>
+                    <button className="menu-leave-btn" onClick={() => { dispatch({ type: 'CLOSE_MENU' }); setConfirmLeave(true) }}>Exit Game</button>
                   </div>
                 </div>
               </div>
@@ -963,7 +970,7 @@ export default function Team() {
       {confirmLeave && (
         <div className="confirm-overlay" onClick={() => setConfirmLeave(false)}>
           <div className="confirm-dialog" onClick={(e) => e.stopPropagation()}>
-            <p>Are you sure you want to leave the team?</p>
+            <p>Are you sure you want to exit the game?</p>
             <div className="confirm-actions">
               <button className="confirm-yes" onClick={handleLeave}>Leave</button>
               <button className="confirm-no" onClick={() => setConfirmLeave(false)}>Cancel</button>
