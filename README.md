@@ -139,11 +139,44 @@ Vite starts on `http://localhost:5173` and proxies `/ws/*` to the Rust backend.
 
 ### Docker
 
+Build and run in a single command:
+
 ```bash
 docker compose up --build
 ```
 
-Container listens on port 3000, accessible on all interfaces.
+The container listens on port **3000**, accessible on all network interfaces.
+
+To run in the background:
+
+```bash
+docker compose up -d --build
+```
+
+To stop and remove the container:
+
+```bash
+docker compose down
+```
+
+To rebuild after code changes:
+
+```bash
+docker compose up -d --build
+```
+
+To view live logs:
+
+```bash
+docker logs -f tune-tracker
+```
+
+Check that the server is running:
+
+```
+http://localhost:3000          # Team (lobby + buzzer)
+http://localhost:3000/host     # Host dashboard
+```
 
 ### Hosting on a network
 
