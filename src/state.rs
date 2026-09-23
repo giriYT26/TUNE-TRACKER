@@ -271,8 +271,11 @@ impl AppState {
     pub async fn set_round_state(&self, state: RoundState) {
         let mut round = self.current_round.write().await;
         let current_state = round.state.clone();
-        if state == RoundState::Active && current_state != RoundState::Locked {
+        if state == RoundState::Active && current_state == RoundState::Idle {
             round.started_at_ms = Some(chrono::Utc::now().timestamp_millis() as u64);
+            round.buzzer_order.clear();
+        } else if state == RoundState::Active && current_state == RoundState::Locked {
+            // Unlock: preserve started_at_ms, clear buzzer order for fresh buzzes
             round.buzzer_order.clear();
         } else if state == RoundState::Idle {
             round.started_at_ms = None;

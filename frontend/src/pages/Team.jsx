@@ -105,7 +105,10 @@ function teamReducer(state, action) {
     }
     case 'ROUND_STATE_CHANGE': {
       const isNewRound = action.state === 'Active' && action.startedAtMs !== state.roundStartTime
-      if (isNewRound || (action.state === 'Active' && state.roundState !== 'Active')) {
+      const isUnlock = action.state === 'Active' && state.roundState === 'Locked'
+      const isStartFromIdle = action.state === 'Active' && state.roundState === 'Idle'
+
+      if (isNewRound || isStartFromIdle) {
         return {
           ...state,
           roundState: action.state,
@@ -119,6 +122,32 @@ function teamReducer(state, action) {
           buzzerOrder: [],
         }
       }
+
+      if (isUnlock) {
+        const frozenElapsed = state.roundStartTime
+          ? (state.frozenAtLock ?? (Date.now() + state.clockOffset - state.roundStartTime))
+          : 0
+        const resumedStartTime = Date.now() + state.clockOffset - frozenElapsed
+        return {
+          ...state,
+          roundState: action.state,
+          buzzerDisabled: false,
+          buzzerPosition: null,
+          roundStartTime: resumedStartTime,
+          frozenAtLock: null,
+        }
+      }
+
+      if (action.state === 'Locked' && state.roundState === 'Active') {
+        const elapsed = state.roundStartTime ? (Date.now() + state.clockOffset - state.roundStartTime) : 0
+        return {
+          ...state,
+          roundState: action.state,
+          buzzerDisabled: true,
+          frozenAtLock: elapsed,
+        }
+      }
+
       return {
         ...state,
         roundState: action.state,
@@ -149,6 +178,7 @@ function teamReducer(state, action) {
         teamsLocked: state.teamsLocked,
         sessionToken: null,
         clockOffset: 0,
+        frozenAtLock: null,
       }
     default:
       return state
@@ -179,6 +209,7 @@ function getInitialState() {
       teamsLocked: false,
       sessionToken: saved.sessionToken || null,
       clockOffset: 0,
+      frozenAtLock: null,
     }
   }
   return {
@@ -202,6 +233,7 @@ function getInitialState() {
     teamsLocked: false,
     sessionToken: null,
     clockOffset: 0,
+    frozenAtLock: null,
   }
 }
 
