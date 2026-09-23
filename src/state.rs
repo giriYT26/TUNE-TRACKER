@@ -274,8 +274,6 @@ impl AppState {
         if state == RoundState::Active && current_state == RoundState::Idle {
             round.started_at_ms = Some(chrono::Utc::now().timestamp_millis() as u64);
             round.buzzer_order.clear();
-        } else if state == RoundState::Active && current_state == RoundState::Locked {
-            round.buzzer_order.clear();
         } else if state == RoundState::Idle {
             round.started_at_ms = None;
             round.buzzer_order.clear();

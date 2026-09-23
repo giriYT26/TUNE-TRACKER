@@ -130,15 +130,11 @@ function teamReducer(state, action) {
         return {
           ...state,
           roundState: action.state,
-          buzzerDisabled: false,
-          buzzerPosition: null,
+          buzzerDisabled: state.teamBuzzed,
+          buzzerPosition: state.teamBuzzed ? state.buzzerPosition : null,
           roundStartTime: resumedStartTime,
           frozenAtLock: null,
-          teamBuzzed: false,
-          myStatus: 'Pending',
-          teamBuzzTime: null,
-          buzzerOrder: [],
-          reactionTime: null,
+          myStatus: state.teamBuzzed ? 'Answered' : 'Pending',
         }
       }
 
