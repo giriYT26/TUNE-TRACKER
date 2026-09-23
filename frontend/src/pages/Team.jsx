@@ -213,10 +213,6 @@ export default function Team() {
   })
   const [creatingTeam, setCreatingTeam] = useState(false)
   const [confirmLeave, setConfirmLeave] = useState(false)
-  const [showUsernameModal, setShowUsernameModal] = useState(() => {
-    const saved = loadSession()
-    return saved?.screen === 'username' || false
-  })
   const [teamSearch, setTeamSearch] = useState('')
   const [usernameEntered, setUsernameEntered] = useState(() => {
     const saved = loadSession()
@@ -269,13 +265,8 @@ export default function Team() {
     (msg) => {
       switch (msg.type) {
         case 'joined':
-          if (autoJoiningRef.current) {
-            autoJoiningRef.current = false
-            send({ type: 'username', username: lobbyUsername.trim() })
-          } else {
-            setShowUsernameModal(true)
-            setJoinError('')
-          }
+          autoJoiningRef.current = false
+          send({ type: 'username', username: lobbyUsername.trim() })
           break
         case 'username_accepted':
           dispatch({ type: 'SET_ROUND_NAME', name: msg.round_name || 'Round 1' })
@@ -283,7 +274,6 @@ export default function Team() {
           if (msg.session_token) {
             dispatch({ type: 'SET_SESSION_TOKEN', token: msg.session_token })
           }
-          setShowUsernameModal(false)
           setJoinError('')
           break
         case 'reconnect_accepted':
@@ -292,7 +282,6 @@ export default function Team() {
           dispatch({ type: 'SET_USERNAME', name: msg.username })
           dispatch({ type: 'SET_ROUND_NAME', name: msg.round_name || 'Round 1' })
           dispatch({ type: 'SET_SCREEN', screen: 'buzzer' })
-          setShowUsernameModal(false)
           setJoinError('')
           break
         case 'error':
@@ -357,8 +346,9 @@ export default function Team() {
         case 'kicked':
           if (msg.username === state.username) {
             dispatch({ type: 'RESET_SESSION' })
-            setShowUsernameModal(false)
             clearSession()
+            setUsernameEntered(false)
+            setLobbyUsername('')
             setJoinError('You have been kicked from the team.')
           }
           break
@@ -399,18 +389,14 @@ export default function Team() {
       reregisteredRef.current = true
       send({ type: 'join', team_name: saved.teamName, action: saved.action || 'join' })
       send({ type: 'username', username: saved.username })
-    } else if (saved && saved.teamName && saved.screen === 'username') {
-      reregisteredRef.current = true
-      send({ type: 'join', team_name: saved.teamName, action: saved.action || 'join' })
-      setShowUsernameModal(true)
     }
   }, [connected, send])
 
   // Save session on screen changes
   useEffect(() => {
-    if (showUsernameModal || state.screen === 'buzzer') {
+    if (state.screen === 'buzzer') {
       saveSession({
-        screen: showUsernameModal ? 'username' : state.screen,
+        screen: state.screen,
         teamName: state.teamName,
         username: state.username,
         action: chosenAction || state.action,
@@ -421,7 +407,7 @@ export default function Team() {
         sessionToken: state.sessionToken,
       })
     }
-  }, [showUsernameModal, state.screen, state.teamName, state.username, chosenAction, state.action, state.teamBuzzed, state.teamBuzzTime, state.roundStartTime, state.buzzerPosition, state.sessionToken])
+  }, [state.screen, state.teamName, state.username, chosenAction, state.action, state.teamBuzzed, state.teamBuzzTime, state.roundStartTime, state.buzzerPosition, state.sessionToken])
 
   const handleJoinTeam = (teamName) => {
     dispatch({ type: 'SET_TEAM_NAME', name: teamName })
@@ -435,6 +421,7 @@ export default function Team() {
     if (!name) return
     setJoinError('')
     setChosenAction('create')
+    autoJoiningRef.current = true
     send({ type: 'join', team_name: name, action: 'create' })
   }
 
@@ -472,17 +459,8 @@ export default function Team() {
     send({ type: 'violation', kind: 'exit_game' })
     send({ type: 'leave' })
     dispatch({ type: 'RESET_SESSION' })
-    setShowUsernameModal(false)
     setUsernameEntered(false)
     setLobbyUsername('')
-    clearSession()
-  }
-
-  const handleCancelUsername = () => {
-    send({ type: 'leave' })
-    dispatch({ type: 'RESET_SESSION' })
-    setShowUsernameModal(false)
-    setJoinError('')
     clearSession()
   }
 
@@ -843,7 +821,7 @@ export default function Team() {
                 </button>
               ))}
 
-              {joinError && !state.teamsLocked && !creatingTeam && !showUsernameModal && usernameEntered && (
+              {joinError && !state.teamsLocked && !creatingTeam && usernameEntered && (
                 <p style={{ color: '#f87171', fontSize: '0.8rem', margin: '0 0 0.5rem 0' }}>{joinError}</p>
               )}
 
@@ -1034,23 +1012,6 @@ export default function Team() {
             <div className="confirm-actions">
               <button className="confirm-yes" onClick={handleLeave}>Leave</button>
               <button className="confirm-no" onClick={() => setConfirmLeave(false)}>Cancel</button>
-            </div>
-          </div>
-        </div>
-      )}
-      {showUsernameModal && (
-        <div className="confirm-overlay" onClick={handleCancelUsername}>
-          <div className="username-modal" onClick={(e) => e.stopPropagation()}>
-            <h3>{state.teamName}</h3>
-            <p className="sub-label">Enter Username</p>
-            <p className="real-name-hint">Enter your real name (no pseudonyms)</p>
-            <input type="text" placeholder="Your real name" value={state.username}
-              onChange={(e) => { dispatch({ type: 'SET_USERNAME', name: e.target.value }); setJoinError('') }}
-              onKeyDown={(e) => e.key === 'Enter' && handleSubmitUsername()} autoFocus />
-            {joinError && <p className="modal-error">{joinError}</p>}
-            <div className="username-modal-actions">
-              <button className="modal-submit" onClick={handleSubmitUsername}>SUBMIT</button>
-              <button className="modal-cancel" onClick={handleCancelUsername}>CANCEL</button>
             </div>
           </div>
         </div>
