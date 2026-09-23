@@ -231,6 +231,11 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
                             serde_json::json!({ "type": "team_list", "teams": team_data }).to_string().into(),
                         )).await;
                     }
+                    ClientMessage::CheckUsername { username: ref uname } => {
+                        let existing_team = state.check_username(uname).await;
+                        let reply = ServerMessage::UsernameStatus { team_name: existing_team };
+                        let _ = sender.send(Message::Text(serde_json::to_string(&reply).unwrap().into())).await;
+                    }
                     ClientMessage::Buzz { .. } => {
                         if let Some(ref uname) = username {
                             tracing::info!(username = %uname, action = "buzz_received");

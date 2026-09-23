@@ -57,6 +57,7 @@ pub enum ServerMessage {
     TeamNameChanged { old_name: String, new_name: String },
     UsernameAccepted { session_token: String, round_name: String },
     ReconnectAccepted { session_token: String, team_name: String, username: String, round_name: String },
+    UsernameStatus { team_name: Option<String> },
 }
 
 #[derive(Debug, Deserialize)]
@@ -81,6 +82,7 @@ pub enum ClientMessage {
     RemoveTeam { team_name: String },
     SetTeamName { team_name: String, new_name: String },
     Leave,
+    CheckUsername { username: String },
 }
 
 pub struct AppState {
@@ -93,6 +95,7 @@ pub struct AppState {
     pub teams_locked: RwLock<bool>,
     pub session_tokens: RwLock<HashMap<String, SessionInfo>>,
     pub active_connections: RwLock<HashMap<String, usize>>,
+    pub user_team_map: RwLock<HashMap<String, String>>,
 }
 
 impl AppState {
@@ -114,6 +117,7 @@ impl AppState {
             teams_locked: RwLock::new(false),
             session_tokens: RwLock::new(HashMap::new()),
             active_connections: RwLock::new(HashMap::new()),
+            user_team_map: RwLock::new(HashMap::new()),
         }
     }
 
@@ -149,12 +153,25 @@ impl AppState {
         }
         drop(users);
 
+        let user_teams = self.user_team_map.read().await;
+        if let Some(existing_team) = user_teams.get(&username) {
+            if existing_team != &team_name {
+                return Err(format!("You already belong to team '{}'. Rejoin that team.", existing_team));
+            }
+        }
+        drop(user_teams);
+
         let teams = self.connected_teams.read().await;
         let member_count = teams.get(&team_name).map_or(0, |m| m.len());
         drop(teams);
 
         if member_count >= MAX_TEAM_SIZE {
             return Err("Team is full (1 member per team)".to_string());
+        }
+
+        {
+            let mut user_teams = self.user_team_map.write().await;
+            user_teams.insert(username.clone(), team_name.clone());
         }
 
         let mut users = self.connected_users.write().await;
@@ -446,7 +463,17 @@ impl AppState {
     pub async fn remove_team(&self, team_name: String) {
         let mut teams = self.connected_teams.write().await;
         teams.remove(&team_name);
+        drop(teams);
+
+        let mut user_teams = self.user_team_map.write().await;
+        user_teams.retain(|_, t| t != &team_name);
+
         tracing::info!(team = %team_name, action = "team_removed");
+    }
+
+    pub async fn check_username(&self, username: &str) -> Option<String> {
+        let user_teams = self.user_team_map.read().await;
+        user_teams.get(username).cloned()
     }
 
     pub async fn rename_team(&self, team_name: String, new_name: String) -> Result<(), String> {

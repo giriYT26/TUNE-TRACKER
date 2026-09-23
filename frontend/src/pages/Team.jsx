@@ -218,6 +218,12 @@ export default function Team() {
     return saved?.screen === 'username' || false
   })
   const [teamSearch, setTeamSearch] = useState('')
+  const [usernameEntered, setUsernameEntered] = useState(() => {
+    const saved = loadSession()
+    return saved?.screen === 'buzzer' || false
+  })
+  const [lobbyUsername, setLobbyUsername] = useState('')
+  const autoJoiningRef = useRef(false)
   const reregisteredRef = useRef(false)
 
   const [state, dispatch] = useReducer(teamReducer, null, getInitialState)
@@ -263,8 +269,13 @@ export default function Team() {
     (msg) => {
       switch (msg.type) {
         case 'joined':
-          setShowUsernameModal(true)
-          setJoinError('')
+          if (autoJoiningRef.current) {
+            autoJoiningRef.current = false
+            send({ type: 'username', username: lobbyUsername.trim() })
+          } else {
+            setShowUsernameModal(true)
+            setJoinError('')
+          }
           break
         case 'username_accepted':
           dispatch({ type: 'SET_ROUND_NAME', name: msg.round_name || 'Round 1' })
@@ -290,7 +301,20 @@ export default function Team() {
         case 'session_expired':
           dispatch({ type: 'RESET_SESSION' })
           clearSession()
+          setUsernameEntered(false)
+          setLobbyUsername('')
           setJoinError('Session expired. Please rejoin.')
+          break
+        case 'username_status':
+          if (msg.team_name) {
+            autoJoiningRef.current = true
+            dispatch({ type: 'SET_USERNAME', name: lobbyUsername.trim() })
+            dispatch({ type: 'SET_TEAM_NAME', name: msg.team_name })
+            setChosenAction('join')
+            send({ type: 'join', team_name: msg.team_name, action: 'join' })
+          } else {
+            setUsernameEntered(true)
+          }
           break
         case 'team_list':
           dispatch({ type: 'SET_TEAM_LIST', teams: msg.teams || [] })
@@ -424,6 +448,16 @@ export default function Team() {
     send({ type: 'username', username: name })
   }
 
+  const handleCheckUsername = () => {
+    const name = lobbyUsername.trim()
+    if (!name) {
+      setJoinError('Please enter your name')
+      return
+    }
+    setJoinError('')
+    send({ type: 'check_username', username: name })
+  }
+
   const handleBuzz = () => {
     if (buzzerAudioRef.current) {
       buzzerAudioRef.current.currentTime = 0
@@ -439,6 +473,8 @@ export default function Team() {
     send({ type: 'leave' })
     dispatch({ type: 'RESET_SESSION' })
     setShowUsernameModal(false)
+    setUsernameEntered(false)
+    setLobbyUsername('')
     clearSession()
   }
 
@@ -778,7 +814,19 @@ export default function Team() {
                 <div className="lobby-locked-banner">🔒 Teams are locked by the host</div>
               )}
 
-              {!state.teamsLocked && (creatingTeam ? (
+              {!usernameEntered && !state.teamsLocked ? (
+                <div className="lobby-create-form">
+                  <p className="sub-label">Enter your name to get started</p>
+                  <p className="real-name-hint">Enter your real name (no pseudonyms)</p>
+                  <input type="text" placeholder="Your real name" value={lobbyUsername}
+                    onChange={(e) => { setLobbyUsername(e.target.value); setJoinError('') }}
+                    onKeyDown={(e) => e.key === 'Enter' && handleCheckUsername()} autoFocus />
+                  <div className="lobby-create-actions">
+                    <button className="create-submit" onClick={handleCheckUsername}>CONTINUE</button>
+                  </div>
+                  {joinError && <p style={{ color: '#f87171', fontSize: '0.8rem', margin: '0.5rem 0 0 0' }}>{joinError}</p>}
+                </div>
+              ) : usernameEntered && !state.teamsLocked && (creatingTeam ? (
                 <div className="lobby-create-form">
                   <input type="text" placeholder="Team Name" value={state.teamName}
                     onChange={(e) => dispatch({ type: 'SET_TEAM_NAME', name: e.target.value })}
@@ -795,37 +843,41 @@ export default function Team() {
                 </button>
               ))}
 
-              {joinError && !state.teamsLocked && !creatingTeam && !showUsernameModal && (
+              {joinError && !state.teamsLocked && !creatingTeam && !showUsernameModal && usernameEntered && (
                 <p style={{ color: '#f87171', fontSize: '0.8rem', margin: '0 0 0.5rem 0' }}>{joinError}</p>
               )}
 
-              <div className="lobby-section-title">TEAMS ({state.teamList.filter(t => t.size > 0).length})</div>
-              {state.teamList.filter(t => t.size > 0).length > 0 && (
-                <input type="text" className="lobby-search" placeholder="Search teams..."
-                  value={teamSearch} onChange={(e) => setTeamSearch(e.target.value)} />
+              {usernameEntered && (
+                <>
+                  <div className="lobby-section-title">TEAMS ({state.teamList.length})</div>
+                  {state.teamList.length > 0 && (
+                    <input type="text" className="lobby-search" placeholder="Search teams..."
+                      value={teamSearch} onChange={(e) => setTeamSearch(e.target.value)} />
+                  )}
+                  <div className="lobby-team-list">
+                    {state.teamList.length === 0 ? (
+                      <div className="lobby-empty">No teams yet</div>
+                    ) : (() => {
+                      const filtered = state.teamList.filter((t) =>
+                        t.name.toLowerCase().includes(teamSearch.toLowerCase())
+                      )
+                      if (filtered.length === 0) {
+                        return <div className="lobby-empty">No matching teams</div>
+                      }
+                      return filtered.map((t) => (
+                        <div key={t.name}
+                          className={`lobby-team-item${state.teamsLocked ? ' locked' : ''}`}
+                          onClick={() => !state.teamsLocked && handleJoinTeam(t.name)}>
+                          <span className="lobby-team-name">{t.name}</span>
+                          <span className={t.size >= t.limit ? 'lobby-team-full' : 'lobby-team-size'}>
+                            {t.size}/{t.limit}{t.size >= t.limit ? ' (full)' : ''}
+                          </span>
+                        </div>
+                      ))
+                    })()}
+                  </div>
+                </>
               )}
-              <div className="lobby-team-list">
-                {state.teamList.filter(t => t.size > 0).length === 0 ? (
-                  <div className="lobby-empty">No teams yet</div>
-                ) : (() => {
-                  const filtered = state.teamList.filter((t) =>
-                    t.size > 0 && t.name.toLowerCase().includes(teamSearch.toLowerCase())
-                  )
-                  if (filtered.length === 0) {
-                    return <div className="lobby-empty">No matching teams</div>
-                  }
-                  return filtered.map((t) => (
-                    <div key={t.name}
-                      className={`lobby-team-item${state.teamsLocked ? ' locked' : ''}`}
-                      onClick={() => !state.teamsLocked && handleJoinTeam(t.name)}>
-                      <span className="lobby-team-name">{t.name}</span>
-                      <span className={t.size >= t.limit ? 'lobby-team-full' : 'lobby-team-size'}>
-                        {t.size}/{t.limit}{t.size >= t.limit ? ' (full)' : ''}
-                      </span>
-                    </div>
-                  ))
-                })()}
-              </div>
 
               <div className="lobby-rules">
                 <div className="lobby-rules-header">Competition Rules</div>

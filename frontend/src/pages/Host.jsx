@@ -20,11 +20,7 @@ function hostReducer(state, action) {
       return { ...state, roundName: action.name }
     case 'TEAM_JOINED': {
       const updated = { ...state.teams }
-      if (action.usernames && action.usernames.length > 0) {
-        updated[action.teamName] = action.usernames
-      } else {
-        delete updated[action.teamName]
-      }
+      updated[action.teamName] = action.usernames || []
       return { ...state, teams: updated }
     }
     case 'TEAM_STATUS': {
