@@ -6,11 +6,10 @@ import buzzerSound from '../assets/buzzer_sound.mp4'
 const SESSION_KEY = 'teamSession'
 const WARNING_SEEN_KEY = 'warningSeen'
 
-const extensionKinds = ['tab_switch', 'window_blur', 'fullscreen_exit', 'page_close', 'navigation']
+const extensionKinds = ['tab_switch', 'fullscreen_exit', 'page_close', 'navigation']
 
 const kindLabels = {
   tab_switch: 'Tab Switch',
-  window_blur: 'Window Blur',
   fullscreen_exit: 'Fullscreen Exit',
   page_close: 'Page Close',
   navigation: 'Navigation',
@@ -512,7 +511,6 @@ export default function Team() {
     const handleVisibility = () => {
       if (document.hidden) reportViolation('tab_switch')
     }
-    const handleBlur = () => reportViolation('window_blur')
     const handleFullscreen = () => {
       if (!document.fullscreenElement) reportViolation('fullscreen_exit')
     }
@@ -524,14 +522,12 @@ export default function Team() {
     }
 
     document.addEventListener('visibilitychange', handleVisibility)
-    window.addEventListener('blur', handleBlur)
     document.addEventListener('fullscreenchange', handleFullscreen)
     window.addEventListener('beforeunload', handleBeforeUnload)
     window.addEventListener('popstate', handlePopState)
 
     return () => {
       document.removeEventListener('visibilitychange', handleVisibility)
-      window.removeEventListener('blur', handleBlur)
       document.removeEventListener('fullscreenchange', handleFullscreen)
       window.removeEventListener('beforeunload', handleBeforeUnload)
       window.removeEventListener('popstate', handlePopState)

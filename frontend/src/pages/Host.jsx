@@ -60,7 +60,7 @@ const medals = ['🥇', '🥈', '🥉']
 
 const kindLabels = {
   tab_switch: 'Tab Switch',
-  window_blur: 'Window Blur',
+
   fullscreen_exit: 'Fullscreen Exit',
   page_close: 'Page Close',
   navigation: 'Navigation',
