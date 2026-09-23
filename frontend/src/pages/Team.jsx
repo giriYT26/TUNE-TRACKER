@@ -91,12 +91,12 @@ function teamReducer(state, action) {
       const nowBuzzed = !!myEvent
       const buzzTime = (nowBuzzed && !state.teamBuzzed)
         ? (myEvent?.reaction_time_ms ?? (state.roundStartTime ? Math.max(0, (Date.now() + state.clockOffset) - state.roundStartTime) : 0))
-        : state.teamBuzzTime
+        : nowBuzzed ? state.teamBuzzTime : null
       return {
         ...state,
         buzzerOrder: action.buzzerOrder,
-        buzzerPosition: myEvent?.position ?? state.buzzerPosition,
-        myStatus: myEvent ? 'Answered' : state.myStatus,
+        buzzerPosition: myEvent?.position ?? null,
+        myStatus: myEvent ? 'Answered' : 'Pending',
         buzzerDisabled: nowBuzzed,
         teamBuzzed: nowBuzzed,
         teamBuzzTime: buzzTime,
@@ -134,6 +134,11 @@ function teamReducer(state, action) {
           buzzerPosition: null,
           roundStartTime: resumedStartTime,
           frozenAtLock: null,
+          teamBuzzed: false,
+          myStatus: 'Pending',
+          teamBuzzTime: null,
+          buzzerOrder: [],
+          reactionTime: null,
         }
       }
 

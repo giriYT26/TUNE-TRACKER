@@ -275,15 +275,16 @@ impl AppState {
             round.started_at_ms = Some(chrono::Utc::now().timestamp_millis() as u64);
             round.buzzer_order.clear();
         } else if state == RoundState::Active && current_state == RoundState::Locked {
-            // Unlock: preserve started_at_ms, clear buzzer order for fresh buzzes
             round.buzzer_order.clear();
         } else if state == RoundState::Idle {
             round.started_at_ms = None;
             round.buzzer_order.clear();
         }
+        let buzzer_order = round.buzzer_order.clone();
         let started_at_ms = round.started_at_ms;
         round.state = state.clone();
         let _ = self.tx.send(ServerMessage::RoundState { state, started_at_ms, server_now: chrono::Utc::now().timestamp_millis() as u64 });
+        let _ = self.tx.send(ServerMessage::BuzzerUpdate { buzzer_order });
     }
 
     pub async fn set_round_name(&self, name: String) {
