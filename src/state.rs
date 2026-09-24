@@ -523,4 +523,9 @@ impl AppState {
         let conns = self.active_connections.read().await;
         conns.get(username).map_or(false, |count| *count > 0)
     }
+
+    pub async fn has_valid_session(&self, username: &str) -> bool {
+        let tokens = self.session_tokens.read().await;
+        tokens.values().any(|info| info.username == username)
+    }
 }
