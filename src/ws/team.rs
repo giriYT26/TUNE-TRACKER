@@ -46,6 +46,7 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
                     state: round.state.clone(),
                     started_at_ms: round.started_at_ms,
                     server_now: chrono::Utc::now().timestamp_millis() as u64,
+                    frozen_elapsed_ms: round.frozen_elapsed_ms,
                 })
                 .unwrap()
                 .into(),

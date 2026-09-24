@@ -34,6 +34,7 @@ pub struct Round {
     pub buzzer_order: Vec<BuzzerEvent>,
     pub name: String,
     pub started_at_ms: Option<u64>,
+    pub frozen_elapsed_ms: Option<u64>,
 }
 
 #[derive(Debug, Clone)]
@@ -47,7 +48,7 @@ pub struct SessionInfo {
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ServerMessage {
     BuzzerUpdate { buzzer_order: Vec<BuzzerEvent> },
-    RoundState { state: RoundState, started_at_ms: Option<u64>, server_now: u64 },
+    RoundState { state: RoundState, started_at_ms: Option<u64>, server_now: u64, frozen_elapsed_ms: Option<u64> },
     RoundName { name: String },
     TeamStatus { team_name: String, username: String, status: TeamStatus, warning_count: u8 },
     TeamJoined { team_name: String, usernames: Vec<String> },
@@ -108,6 +109,7 @@ impl AppState {
                 buzzer_order: Vec::new(),
                 name: "Round 1".to_string(),
                 started_at_ms: None,
+                frozen_elapsed_ms: None,
             }),
             tx,
             connected_teams: RwLock::new(HashMap::new()),
@@ -271,17 +273,30 @@ impl AppState {
     pub async fn set_round_state(&self, state: RoundState) {
         let mut round = self.current_round.write().await;
         let current_state = round.state.clone();
+        let now_ms = chrono::Utc::now().timestamp_millis() as u64;
         if state == RoundState::Active && current_state == RoundState::Idle {
-            round.started_at_ms = Some(chrono::Utc::now().timestamp_millis() as u64);
+            round.started_at_ms = Some(now_ms);
             round.buzzer_order.clear();
+            round.frozen_elapsed_ms = None;
+        } else if state == RoundState::Active && current_state == RoundState::Locked {
+            if let (Some(_started), Some(frozen)) = (round.started_at_ms, round.frozen_elapsed_ms) {
+                round.started_at_ms = Some(now_ms - frozen);
+            }
+            round.frozen_elapsed_ms = None;
+        } else if state == RoundState::Locked && current_state == RoundState::Active {
+            if let Some(started) = round.started_at_ms {
+                round.frozen_elapsed_ms = Some(now_ms.saturating_sub(started));
+            }
         } else if state == RoundState::Idle {
             round.started_at_ms = None;
             round.buzzer_order.clear();
+            round.frozen_elapsed_ms = None;
         }
         let buzzer_order = round.buzzer_order.clone();
         let started_at_ms = round.started_at_ms;
+        let frozen_elapsed_ms = round.frozen_elapsed_ms;
         round.state = state.clone();
-        let _ = self.tx.send(ServerMessage::RoundState { state, started_at_ms, server_now: chrono::Utc::now().timestamp_millis() as u64 });
+        let _ = self.tx.send(ServerMessage::RoundState { state, started_at_ms, server_now: now_ms, frozen_elapsed_ms });
         let _ = self.tx.send(ServerMessage::BuzzerUpdate { buzzer_order });
     }
 
@@ -304,6 +319,7 @@ impl AppState {
             state: RoundState::Idle,
             started_at_ms: None,
             server_now: chrono::Utc::now().timestamp_millis() as u64,
+            frozen_elapsed_ms: None,
         });
         tracing::info!(action = "buzzer_reset");
     }
@@ -312,7 +328,9 @@ impl AppState {
         let mut round = self.current_round.write().await;
         round.id = Uuid::new_v4();
         round.buzzer_order.clear();
-        round.started_at_ms = Some(chrono::Utc::now().timestamp_millis() as u64);
+        let now_ms = chrono::Utc::now().timestamp_millis() as u64;
+        round.started_at_ms = Some(now_ms);
+        round.frozen_elapsed_ms = None;
         round.state = RoundState::Active;
         let started_at_ms = round.started_at_ms;
         let _ = self.tx.send(ServerMessage::BuzzerUpdate {
@@ -321,7 +339,8 @@ impl AppState {
         let _ = self.tx.send(ServerMessage::RoundState {
             state: RoundState::Active,
             started_at_ms,
-            server_now: chrono::Utc::now().timestamp_millis() as u64,
+            server_now: now_ms,
+            frozen_elapsed_ms: None,
         });
         tracing::info!(action = "next_question");
     }

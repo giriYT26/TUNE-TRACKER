@@ -103,11 +103,22 @@ function teamReducer(state, action) {
       }
     }
     case 'ROUND_STATE_CHANGE': {
-      const isNewRound = action.state === 'Active' && action.startedAtMs !== state.roundStartTime
       const isUnlock = action.state === 'Active' && state.roundState === 'Locked'
-      const isStartFromIdle = action.state === 'Active' && state.roundState === 'Idle'
+      const isNewRound = action.state === 'Active' && (state.roundState === 'Idle' || state.roundState === undefined)
 
-      if (isNewRound || isStartFromIdle) {
+      if (isUnlock) {
+        return {
+          ...state,
+          roundState: action.state,
+          buzzerDisabled: state.teamBuzzed,
+          buzzerPosition: state.teamBuzzed ? state.buzzerPosition : null,
+          roundStartTime: action.startedAtMs ?? state.roundStartTime,
+          frozenElapsedMs: null,
+          myStatus: state.teamBuzzed ? 'Answered' : 'Pending',
+        }
+      }
+
+      if (isNewRound) {
         return {
           ...state,
           roundState: action.state,
@@ -119,32 +130,17 @@ function teamReducer(state, action) {
           teamBuzzed: false,
           teamBuzzTime: null,
           buzzerOrder: [],
+          frozenElapsedMs: null,
         }
       }
 
-      if (isUnlock) {
-        const frozenElapsed = state.roundStartTime
-          ? (state.frozenAtLock ?? (Date.now() + state.clockOffset - state.roundStartTime))
-          : 0
-        const resumedStartTime = Date.now() + state.clockOffset - frozenElapsed
-        return {
-          ...state,
-          roundState: action.state,
-          buzzerDisabled: state.teamBuzzed,
-          buzzerPosition: state.teamBuzzed ? state.buzzerPosition : null,
-          roundStartTime: resumedStartTime,
-          frozenAtLock: null,
-          myStatus: state.teamBuzzed ? 'Answered' : 'Pending',
-        }
-      }
-
-      if (action.state === 'Locked' && state.roundState === 'Active') {
-        const elapsed = state.roundStartTime ? (Date.now() + state.clockOffset - state.roundStartTime) : 0
+      if (action.state === 'Locked') {
         return {
           ...state,
           roundState: action.state,
           buzzerDisabled: true,
-          frozenAtLock: elapsed,
+          roundStartTime: action.startedAtMs ?? state.roundStartTime,
+          frozenElapsedMs: action.frozenElapsedMs ?? null,
         }
       }
 
@@ -178,7 +174,7 @@ function teamReducer(state, action) {
         teamsLocked: state.teamsLocked,
         sessionToken: null,
         clockOffset: 0,
-        frozenAtLock: null,
+        frozenElapsedMs: null,
       }
     default:
       return state
@@ -209,7 +205,7 @@ function getInitialState() {
       teamsLocked: false,
       sessionToken: saved.sessionToken || null,
       clockOffset: 0,
-      frozenAtLock: null,
+      frozenElapsedMs: null,
     }
   }
   return {
@@ -233,7 +229,7 @@ function getInitialState() {
     teamsLocked: false,
     sessionToken: null,
     clockOffset: 0,
-    frozenAtLock: null,
+    frozenElapsedMs: null,
   }
 }
 
@@ -357,7 +353,7 @@ export default function Team() {
             const offset = msg.server_now - Date.now()
             dispatch({ type: 'SET_CLOCK_OFFSET', offset })
           }
-          dispatch({ type: 'ROUND_STATE_CHANGE', state: msg.state, startedAtMs: msg.started_at_ms })
+          dispatch({ type: 'ROUND_STATE_CHANGE', state: msg.state, startedAtMs: msg.started_at_ms, frozenElapsedMs: msg.frozen_elapsed_ms })
           break
         case 'round_name':
           dispatch({ type: 'SET_ROUND_NAME', name: msg.name })
