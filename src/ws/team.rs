@@ -151,6 +151,9 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
                                 });
                                 let _ = sender.send(Message::Text(reply.to_string().into())).await;
 
+                                let buzzer_order = state.current_round.read().await.buzzer_order.clone();
+                                let _ = state.tx.send(ServerMessage::BuzzerUpdate { buzzer_order });
+
                                 tracing::info!(
                                     username = %info.username,
                                     team = %info.team_name,
@@ -200,11 +203,15 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
                                 }
 
                                 let round = state.current_round.read().await;
+                                let buzzer_order = round.buzzer_order.clone();
                                 let reply = ServerMessage::UsernameAccepted {
                                     session_token,
                                     round_name: round.name.clone(),
                                 };
                                 let _ = sender.send(Message::Text(serde_json::to_string(&reply).unwrap().into())).await;
+                                drop(round);
+
+                                let _ = state.tx.send(ServerMessage::BuzzerUpdate { buzzer_order });
 
                                 tracing::info!(
                                     username = %name,
