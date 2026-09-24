@@ -518,4 +518,9 @@ impl AppState {
             }
         }
     }
+
+    pub async fn has_active_connection(&self, username: &str) -> bool {
+        let conns = self.active_connections.read().await;
+        conns.get(username).map_or(false, |count| *count > 0)
+    }
 }

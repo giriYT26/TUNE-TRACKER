@@ -151,9 +151,6 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
                                 });
                                 let _ = sender.send(Message::Text(reply.to_string().into())).await;
 
-                                let buzzer_order = state.current_round.read().await.buzzer_order.clone();
-                                let _ = state.tx.send(ServerMessage::BuzzerUpdate { buzzer_order });
-
                                 tracing::info!(
                                     username = %info.username,
                                     team = %info.team_name,
@@ -203,15 +200,11 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
                                 }
 
                                 let round = state.current_round.read().await;
-                                let buzzer_order = round.buzzer_order.clone();
                                 let reply = ServerMessage::UsernameAccepted {
                                     session_token,
                                     round_name: round.name.clone(),
                                 };
                                 let _ = sender.send(Message::Text(serde_json::to_string(&reply).unwrap().into())).await;
-                                drop(round);
-
-                                let _ = state.tx.send(ServerMessage::BuzzerUpdate { buzzer_order });
 
                                 tracing::info!(
                                     username = %name,
@@ -293,13 +286,19 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
         }
     }
 
-    // On disconnect, remove user from connected maps and untrack connection
+    // On disconnect, remove user from connected maps and untrack connection.
+    // Only remove the user if no other live connection is still active, since a fast
+    // page refresh reconnects and re-adds the user before the old socket's cleanup runs.
     if let Some(ref uname) = username {
         state.untrack_connection(uname).await;
-        state.remove_user_with_broadcast(uname).await;
+        let still_active = state.has_active_connection(uname).await;
+        if !still_active {
+            state.remove_user_with_broadcast(uname).await;
+        }
         tracing::info!(
             username = %uname,
-            action = "disconnected"
+            action = "disconnected",
+            still_active = still_active
         );
     } else {
         tracing::debug!(action = "disconnected", note = "no username set");
