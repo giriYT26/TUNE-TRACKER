@@ -176,6 +176,24 @@ function teamReducer(state, action) {
         clockOffset: 0,
         frozenElapsedMs: null,
       }
+    case 'GO_TO_LOBBY':
+      return {
+        ...state,
+        screen: 'choose',
+        roundName: 'Round 1',
+        myStatus: 'Pending',
+        buzzerDisabled: false,
+        buzzerPosition: null,
+        roundState: 'Idle',
+        teamMembers: [],
+        roundStartTime: null,
+        reactionTime: null,
+        teamBuzzed: false,
+        teamBuzzTime: null,
+        buzzerOrder: [],
+        menuOpen: false,
+        frozenElapsedMs: null,
+      }
     default:
       return state
   }
@@ -254,6 +272,7 @@ export default function Team() {
   const [tick, setTick] = useState(0)
   const [warningNotice, setWarningNotice] = useState(null)
   const [renamingTeam, setRenamingTeam] = useState(false)
+  const [renameError, setRenameError] = useState('')
   const [renameValue, setRenameValue] = useState('')
   const buzzerAudioRef = useRef(null)
 
@@ -314,6 +333,7 @@ export default function Team() {
           break
         case 'error':
           setJoinError(msg.message)
+          setRenameError(msg.message)
           break
         case 'session_expired':
           dispatch({ type: 'RESET_SESSION' })
@@ -349,7 +369,7 @@ export default function Team() {
           })
           break
         case 'round_state':
-          if (msg.state === 'Active' && msg.started_at_ms != null && msg.server_now != null) {
+          if (msg.server_now != null) {
             const offset = msg.server_now - Date.now()
             dispatch({ type: 'SET_CLOCK_OFFSET', offset })
           }
@@ -484,12 +504,8 @@ export default function Team() {
   const handleLeave = () => {
     setConfirmLeave(false)
     dispatch({ type: 'CLOSE_MENU' })
-    send({ type: 'violation', kind: 'exit_game' })
     send({ type: 'leave' })
-    dispatch({ type: 'RESET_SESSION' })
-    setUsernameEntered(false)
-    setLobbyUsername('')
-    clearSession()
+    dispatch({ type: 'GO_TO_LOBBY' })
   }
 
   useEffect(() => {
@@ -930,9 +946,11 @@ export default function Team() {
                 ? formatReactionTime(state.reactionTime)
                 : state.teamBuzzed && state.teamBuzzTime !== null
                   ? formatReactionTime(state.teamBuzzTime)
-                  : state.roundStartTime
-                    ? formatReactionTime(Math.max(0, (Date.now() + state.clockOffset) - state.roundStartTime))
-                    : '00:00:000'}
+                  : state.roundState === 'Locked' && state.frozenElapsedMs != null
+                    ? formatReactionTime(state.frozenElapsedMs)
+                    : state.roundStartTime
+                      ? formatReactionTime(Math.max(0, (Date.now() + state.clockOffset) - state.roundStartTime))
+                      : '00:00:000'}
             </div>
 
               <div style={{ margin: '1.5rem 0' }}>
@@ -976,7 +994,7 @@ export default function Team() {
                   {!state.teamsLocked && (
                     <div className="side-menu-section">
                       {!renamingTeam ? (
-                        <button className="menu-leave-btn" onClick={() => { setRenamingTeam(true); setRenameValue(state.teamName) }}>Rename Team</button>
+                        <button className="menu-leave-btn" onClick={() => { setRenamingTeam(true); setRenameValue(state.teamName); setRenameError('') }}>Rename Team</button>
                       ) : (
                         <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
                           <input type="text" value={renameValue}
@@ -1002,6 +1020,7 @@ export default function Team() {
                           }} style={{ padding: '0.4rem 0.8rem', background: 'rgba(168,139,250,0.2)', border: '1px solid rgba(168,139,250,0.4)', borderRadius: '6px', color: '#c4b5fd', fontSize: '0.8rem', cursor: 'pointer' }}>Save</button>
                         </div>
                       )}
+                      {renameError && <p style={{ color: '#f87171', fontSize: '0.75rem', margin: '0.4rem 0 0 0' }}>{renameError}</p>}
                     </div>
                   )}
 

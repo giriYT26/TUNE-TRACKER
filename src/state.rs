@@ -42,6 +42,7 @@ pub struct SessionInfo {
     pub team_name: String,
     pub username: String,
     pub joined_at_ms: u64,
+    pub renamed: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -195,6 +196,7 @@ impl AppState {
             team_name: team_name.clone(),
             username: username.clone(),
             joined_at_ms: chrono::Utc::now().timestamp_millis() as u64,
+            renamed: false,
         };
         let mut tokens = self.session_tokens.write().await;
         tokens.insert(token.clone(), session_info);
@@ -507,11 +509,47 @@ impl AppState {
         }
         drop(teams);
 
-        let mut teams = self.connected_teams.write().await;
-        if let Some(members) = teams.remove(&team_name) {
-            teams.insert(new_name.clone(), members);
+        let mut tokens = self.session_tokens.write().await;
+        for info in tokens.values_mut() {
+            if info.team_name == team_name {
+                if info.renamed {
+                    return Err("Team can only be renamed once".to_string());
+                }
+            }
         }
-        drop(teams);
+        for info in tokens.values_mut() {
+            if info.team_name == team_name {
+                info.renamed = true;
+            }
+        }
+        drop(tokens);
+
+        let members: Vec<String>;
+        {
+            let mut teams = self.connected_teams.write().await;
+            members = teams.get(&team_name).cloned().unwrap_or_default();
+            if let Some(m) = teams.remove(&team_name) {
+                teams.insert(new_name.clone(), m);
+            }
+        }
+
+        {
+            let mut users = self.connected_users.write().await;
+            for member in &members {
+                if let Some(t) = users.get_mut(member) {
+                    *t = new_name.clone();
+                }
+            }
+        }
+
+        {
+            let mut user_teams = self.user_team_map.write().await;
+            for member in &members {
+                if let Some(t) = user_teams.get_mut(member) {
+                    *t = new_name.clone();
+                }
+            }
+        }
 
         let _ = self.tx.send(ServerMessage::TeamNameChanged {
             old_name: team_name,

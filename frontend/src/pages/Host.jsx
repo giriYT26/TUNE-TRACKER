@@ -51,6 +51,15 @@ function hostReducer(state, action) {
       return { ...state, violations: [] }
     case 'TEAM_LOCK':
       return { ...state, teamsLocked: action.locked }
+    case 'TEAM_NAME_CHANGED': {
+      const updated = { ...state.teams }
+      const members = updated[action.oldName]
+      if (members !== undefined) {
+        delete updated[action.oldName]
+        updated[action.newName] = members
+      }
+      return { ...state, teams: updated }
+    }
     default:
       return state
   }
@@ -119,6 +128,9 @@ export default function Host() {
         break
       case 'team_lock':
         dispatch({ type: 'TEAM_LOCK', locked: msg.locked })
+        break
+      case 'team_name_changed':
+        dispatch({ type: 'TEAM_NAME_CHANGED', oldName: msg.old_name, newName: msg.new_name })
         break
     }
   }, [])
