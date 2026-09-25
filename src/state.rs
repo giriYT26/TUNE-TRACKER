@@ -57,6 +57,7 @@ pub enum ServerMessage {
     Kicked { team_name: String, username: String },
     TeamLock { locked: bool },
     TeamNameChanged { old_name: String, new_name: String },
+    TeamRemoved { team_name: String },
     UsernameAccepted { session_token: String, round_name: String },
     ReconnectAccepted { session_token: String, team_name: String, username: String, round_name: String },
     UsernameStatus { team_name: Option<String> },
@@ -126,15 +127,15 @@ impl AppState {
 
     pub async fn join_team(&self, team_name: String, action: String) -> Result<(), String> {
         let locked = *self.teams_locked.read().await;
-        if locked {
-            return Err("Teams are locked by the host".to_string());
-        }
 
         let teams = self.connected_teams.read().await;
         let team_exists = teams.contains_key(&team_name);
         drop(teams);
 
         if action == "create" {
+            if locked {
+                return Err("Teams are locked by the host".to_string());
+            }
             if team_exists {
                 return Err("Team name already taken".to_string());
             }
@@ -150,26 +151,36 @@ impl AppState {
     }
 
     pub async fn add_username(&self, team_name: String, username: String) -> Result<String, String> {
-        let users = self.connected_users.read().await;
-        if users.contains_key(&username) {
-            return Err("Username already taken".to_string());
-        }
-        drop(users);
+        let locked = *self.teams_locked.read().await;
+        let mut is_rejoin = false;
 
         let user_teams = self.user_team_map.read().await;
         if let Some(existing_team) = user_teams.get(&username) {
             if existing_team != &team_name {
                 return Err(format!("You already belong to team '{}'. Rejoin that team.", existing_team));
             }
+            is_rejoin = true;
         }
         drop(user_teams);
 
-        let teams = self.connected_teams.read().await;
-        let member_count = teams.get(&team_name).map_or(0, |m| m.len());
-        drop(teams);
+        if !is_rejoin {
+            if locked {
+                return Err("Teams are locked by the host".to_string());
+            }
+            
+            let users = self.connected_users.read().await;
+            if users.contains_key(&username) {
+                return Err("Username already taken".to_string());
+            }
+            drop(users);
 
-        if member_count >= MAX_TEAM_SIZE {
-            return Err("Team is full (1 member per team)".to_string());
+            let teams = self.connected_teams.read().await;
+            let member_count = teams.get(&team_name).map_or(0, |m| m.len());
+            drop(teams);
+
+            if member_count >= MAX_TEAM_SIZE {
+                return Err("Team is full (1 member per team)".to_string());
+            }
         }
 
         {
@@ -182,7 +193,9 @@ impl AppState {
 
         let mut teams = self.connected_teams.write().await;
         if let Some(members) = teams.get_mut(&team_name) {
-            members.push(username.clone());
+            if !members.contains(&username) {
+                members.push(username.clone());
+            }
         }
 
         let usernames = teams.get(&team_name).cloned().unwrap_or_default();
@@ -492,6 +505,8 @@ impl AppState {
         user_teams.retain(|_, t| t != &team_name);
 
         tracing::info!(team = %team_name, action = "team_removed");
+
+        let _ = self.tx.send(ServerMessage::TeamRemoved { team_name });
     }
 
     pub async fn check_username(&self, username: &str) -> Option<String> {

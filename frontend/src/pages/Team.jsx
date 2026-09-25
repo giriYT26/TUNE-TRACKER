@@ -49,7 +49,7 @@ function formatReactionTime(ms) {
 function teamReducer(state, action) {
   switch (action.type) {
     case 'SET_SCREEN':
-      return { ...state, screen: action.screen }
+      return { ...state, screen: action.screen, previousTeamName: action.screen === 'buzzer' ? null : state.previousTeamName }
     case 'SET_TEAM_NAME':
       return { ...state, teamName: action.name }
     case 'SET_USERNAME':
@@ -175,11 +175,13 @@ function teamReducer(state, action) {
         sessionToken: null,
         clockOffset: 0,
         frozenElapsedMs: null,
+        previousTeamName: null,
       }
     case 'GO_TO_LOBBY':
       return {
         ...state,
         screen: 'choose',
+        previousTeamName: state.teamName,
         roundName: 'Round 1',
         myStatus: 'Pending',
         buzzerDisabled: false,
@@ -224,6 +226,7 @@ function getInitialState() {
       sessionToken: saved.sessionToken || null,
       clockOffset: 0,
       frozenElapsedMs: null,
+      previousTeamName: null,
     }
   }
   return {
@@ -248,6 +251,7 @@ function getInitialState() {
     sessionToken: null,
     clockOffset: 0,
     frozenElapsedMs: null,
+    previousTeamName: null,
   }
 }
 
@@ -267,6 +271,9 @@ export default function Team() {
   const [lobbyUsername, setLobbyUsername] = useState('')
   const autoJoiningRef = useRef(false)
   const reregisteredRef = useRef(false)
+  // Tracks the username the player submitted so it can be written to the
+  // reducer in username_accepted regardless of closure staleness.
+  const pendingUsernameRef = useRef('')
 
   const [state, dispatch] = useReducer(teamReducer, null, getInitialState)
   const [tick, setTick] = useState(0)
@@ -313,9 +320,14 @@ export default function Team() {
       switch (msg.type) {
         case 'joined':
           autoJoiningRef.current = false
-          send({ type: 'username', username: lobbyUsername.trim() })
+          send({ type: 'username', username: state.username || lobbyUsername.trim() })
           break
         case 'username_accepted':
+          // pendingUsernameRef is set in handleCheckUsername; state.username is
+          // set there too. Both are fallbacks for each other.
+          if (pendingUsernameRef.current || state.username) {
+            dispatch({ type: 'SET_USERNAME', name: pendingUsernameRef.current || state.username })
+          }
           dispatch({ type: 'SET_ROUND_NAME', name: msg.round_name || 'Round 1' })
           dispatch({ type: 'SET_SCREEN', screen: 'buzzer' })
           if (msg.session_token) {
@@ -416,7 +428,9 @@ export default function Team() {
           break
       }
     },
-    [state.username, state.teamName]
+    // lobbyUsername included so the 'joined' handler never reads a stale name.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [state.username, state.teamName, lobbyUsername]
   )
 
   const { connected, send } = useWebSocket('/ws/team', handleServerMessage)
@@ -435,8 +449,10 @@ export default function Team() {
       send({ type: 'reconnect', session_token: saved.sessionToken })
     } else if (saved && saved.teamName && saved.username) {
       reregisteredRef.current = true
+      // Only send join here. The 'joined' handler will send username via
+      // state.username (loaded from session). Sending username immediately
+      // would race with the joined response and cause a double-send error.
       send({ type: 'join', team_name: saved.teamName, action: saved.action || 'join' })
-      send({ type: 'username', username: saved.username })
     }
   }, [connected, send])
 
@@ -490,6 +506,10 @@ export default function Team() {
       return
     }
     setJoinError('')
+    // Write username into the reducer immediately so saveSession always
+    // captures a non-empty value — this is what makes refresh reconnect work.
+    pendingUsernameRef.current = name
+    dispatch({ type: 'SET_USERNAME', name })
     send({ type: 'check_username', username: name })
   }
 
@@ -505,6 +525,9 @@ export default function Team() {
     setConfirmLeave(false)
     dispatch({ type: 'CLOSE_MENU' })
     send({ type: 'leave' })
+    // Clear session so a reload after leaving doesn't re-admit the player
+    // via a still-valid session token.
+    clearSession()
     dispatch({ type: 'GO_TO_LOBBY' })
   }
 
@@ -845,6 +868,19 @@ export default function Team() {
                   </div>
                   {joinError && <p style={{ color: '#f87171', fontSize: '0.8rem', margin: '0.5rem 0 0 0' }}>{joinError}</p>}
                 </div>
+              ) : usernameEntered && state.previousTeamName && !state.teamsLocked ? (
+                <div className="lobby-create-form" style={{ textAlign: 'center' }}>
+                  <p className="sub-label">Your previous team</p>
+                  <p style={{ color: '#a78bfa', fontSize: '1.2rem', fontWeight: 700, margin: '0.5rem 0' }}>{state.previousTeamName}</p>
+                  <button className="create-submit" style={{ width: '100%', marginTop: '0.5rem' }}
+                    onClick={() => {
+                      setChosenAction('join')
+                      send({ type: 'join', team_name: state.previousTeamName, action: 'join' })
+                    }}>
+                    REJOIN TEAM
+                  </button>
+                  {joinError && <p style={{ color: '#f87171', fontSize: '0.8rem', margin: '0.5rem 0 0 0' }}>{joinError}</p>}
+                </div>
               ) : usernameEntered && !state.teamsLocked && (creatingTeam ? (
                 <div className="lobby-create-form">
                   <input type="text" placeholder="Team Name" value={state.teamName}
@@ -866,7 +902,7 @@ export default function Team() {
                 <p style={{ color: '#f87171', fontSize: '0.8rem', margin: '0 0 0.5rem 0' }}>{joinError}</p>
               )}
 
-              {usernameEntered && (
+              {usernameEntered && !state.previousTeamName && (
                 <>
                   <div className="lobby-section-title">TEAMS ({state.teamList.length})</div>
                   {state.teamList.length > 0 && (
@@ -990,39 +1026,7 @@ export default function Team() {
                     </div>
                   )}
 
-                  {/* Rename Team */}
-                  {!state.teamsLocked && (
-                    <div className="side-menu-section">
-                      {!renamingTeam ? (
-                        <button className="menu-leave-btn" onClick={() => { setRenamingTeam(true); setRenameValue(state.teamName); setRenameError('') }}>Rename Team</button>
-                      ) : (
-                        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                          <input type="text" value={renameValue}
-                            onChange={(e) => setRenameValue(e.target.value)}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') {
-                                const newName = renameValue.trim()
-                                if (newName && newName !== state.teamName) {
-                                  send({ type: 'set_team_name', team_name: state.teamName, new_name: newName })
-                                }
-                                setRenamingTeam(false)
-                              }
-                              if (e.key === 'Escape') setRenamingTeam(false)
-                            }}
-                            autoFocus
-                            style={{ flex: 1, padding: '0.4rem 0.6rem', background: 'rgba(0,0,0,0.4)', border: '1px solid rgba(168,139,250,0.5)', borderRadius: '6px', color: '#f1f5f9', fontSize: '0.85rem' }} />
-                          <button onClick={() => {
-                            const newName = renameValue.trim()
-                            if (newName && newName !== state.teamName) {
-                              send({ type: 'set_team_name', team_name: state.teamName, new_name: newName })
-                            }
-                            setRenamingTeam(false)
-                          }} style={{ padding: '0.4rem 0.8rem', background: 'rgba(168,139,250,0.2)', border: '1px solid rgba(168,139,250,0.4)', borderRadius: '6px', color: '#c4b5fd', fontSize: '0.8rem', cursor: 'pointer' }}>Save</button>
-                        </div>
-                      )}
-                      {renameError && <p style={{ color: '#f87171', fontSize: '0.75rem', margin: '0.4rem 0 0 0' }}>{renameError}</p>}
-                    </div>
-                  )}
+
 
                   {/* Leave Team */}
                   <div className="side-menu-section">

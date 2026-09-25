@@ -126,7 +126,41 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
                                     state.handle_violation(info.username.clone(), "dual_tab".into()).await;
                                 }
 
-                                // Broadcast updated team list
+                                team_name = Some(info.team_name.clone());
+                                username = Some(info.username.clone());
+
+                                let round = state.current_round.read().await;
+                                let round_name = round.name.clone();
+                                let frozen_elapsed_ms = round.frozen_elapsed_ms;
+                                let started_at_ms = round.started_at_ms;
+                                let round_state = round.state.clone();
+                                let buzzer_order = round.buzzer_order.clone();
+                                drop(round);
+
+                                let reply = serde_json::json!({
+                                    "type": "reconnect_accepted",
+                                    "session_token": session_token,
+                                    "team_name": info.team_name.clone(),
+                                    "username": info.username.clone(),
+                                    "round_name": round_name
+                                });
+                                let _ = sender.send(Message::Text(reply.to_string().into())).await;
+
+                                let _ = sender.send(Message::Text(
+                                    serde_json::to_string(&ServerMessage::RoundState {
+                                        state: round_state,
+                                        started_at_ms,
+                                        server_now: chrono::Utc::now().timestamp_millis() as u64,
+                                        frozen_elapsed_ms,
+                                    }).unwrap().into(),
+                                )).await;
+
+                                let _ = sender.send(Message::Text(
+                                    serde_json::to_string(&ServerMessage::BuzzerUpdate {
+                                        buzzer_order,
+                                    }).unwrap().into(),
+                                )).await;
+
                                 let teams_snapshot = state.connected_teams.read().await;
                                 for (t_name, t_members) in teams_snapshot.iter() {
                                     let _ = state.tx.send(ServerMessage::TeamJoined {
@@ -135,37 +169,6 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
                                     });
                                 }
                                 drop(teams_snapshot);
-
-                                team_name = Some(info.team_name.clone());
-                                username = Some(info.username.clone());
-
-                                let round = state.current_round.read().await;
-                                let round_name = round.name.clone();
-                                drop(round);
-
-                                let reply = serde_json::json!({
-                                    "type": "reconnect_accepted",
-                                    "session_token": session_token,
-                                    "team_name": info.team_name,
-                                    "username": info.username,
-                                    "round_name": round_name
-                                });
-                                let _ = sender.send(Message::Text(reply.to_string().into())).await;
-
-                                {
-                                    let round = state.current_round.read().await;
-                                    let _ = sender.send(Message::Text(
-                                        serde_json::to_string(&ServerMessage::RoundState {
-                                            state: round.state.clone(),
-                                            started_at_ms: round.started_at_ms,
-                                            server_now: chrono::Utc::now().timestamp_millis() as u64,
-                                            frozen_elapsed_ms: round.frozen_elapsed_ms,
-                                        }).unwrap().into(),
-                                    )).await;
-                                    let buzzer_order = round.buzzer_order.clone();
-                                    drop(round);
-                                    let _ = state.tx.send(ServerMessage::BuzzerUpdate { buzzer_order });
-                                }
 
                                 tracing::info!(
                                     username = %info.username,
@@ -284,6 +287,37 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
                         }
                     }
                     ClientMessage::Leave => {
+                        if let Some(ref uname) = username {
+                            {
+                                let mut users = state.connected_users.write().await;
+                                users.remove(uname);
+                            }
+                            {
+                                let mut user_teams = state.user_team_map.write().await;
+                                user_teams.remove(uname);
+                            }
+                            if let Some(ref tname) = team_name {
+                                let (updated_usernames, is_empty) = {
+                                    let mut teams = state.connected_teams.write().await;
+                                    if let Some(members) = teams.get_mut(tname) {
+                                        members.retain(|u| u != uname);
+                                        (members.clone(), members.is_empty())
+                                    } else {
+                                        (Vec::new(), true)
+                                    }
+                                };
+                                
+                                if is_empty {
+                                    state.remove_team(tname.clone()).await;
+                                } else {
+                                    let _ = state.tx.send(ServerMessage::TeamJoined {
+                                        team_name: tname.clone(),
+                                        usernames: updated_usernames,
+                                    });
+                                }
+                            }
+                            tracing::info!(username = %uname, action = "left");
+                        }
                         break;
                     }
                     _ => {}
@@ -318,6 +352,47 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
             action = "disconnected",
             still_active = still_active
         );
+
+        if !still_active {
+            let state_clone = state.clone();
+            let uname_clone = uname.clone();
+            let tname_clone = team_name.clone();
+            tokio::spawn(async move {
+                tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
+                if !state_clone.has_active_connection(&uname_clone).await {
+                    tracing::info!(username = %uname_clone, action = "ghost_cleanup");
+                    
+                    {
+                        let mut users = state_clone.connected_users.write().await;
+                        users.remove(&uname_clone);
+                    }
+                    {
+                        let mut user_teams = state_clone.user_team_map.write().await;
+                        user_teams.remove(&uname_clone);
+                    }
+                    if let Some(ref tname) = tname_clone {
+                        let (updated_usernames, is_empty) = {
+                            let mut teams = state_clone.connected_teams.write().await;
+                            if let Some(members) = teams.get_mut(tname) {
+                                members.retain(|u| u != &uname_clone);
+                                (members.clone(), members.is_empty())
+                            } else {
+                                (Vec::new(), true)
+                            }
+                        };
+                        
+                        if is_empty {
+                            state_clone.remove_team(tname.clone()).await;
+                        } else {
+                            let _ = state_clone.tx.send(ServerMessage::TeamJoined {
+                                team_name: tname.clone(),
+                                usernames: updated_usernames,
+                            });
+                        }
+                    }
+                }
+            });
+        }
     } else {
         tracing::debug!(action = "disconnected", note = "no username set");
     }

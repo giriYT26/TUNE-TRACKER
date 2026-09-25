@@ -23,6 +23,11 @@ function hostReducer(state, action) {
       updated[action.teamName] = action.usernames || []
       return { ...state, teams: updated }
     }
+    case 'TEAM_REMOVED': {
+      const updated = { ...state.teams }
+      delete updated[action.teamName]
+      return { ...state, teams: updated }
+    }
     case 'TEAM_STATUS': {
       const updated = { ...state.teams }
       if (action.status === 'Disqualified') {
@@ -108,6 +113,9 @@ export default function Host() {
         break
       case 'team_joined':
         dispatch({ type: 'TEAM_JOINED', teamName: msg.team_name, usernames: msg.usernames })
+        break
+      case 'team_removed':
+        dispatch({ type: 'TEAM_REMOVED', teamName: msg.team_name })
         break
       case 'team_status':
         dispatch({

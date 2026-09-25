@@ -7,6 +7,7 @@ export default defineConfig({
     target: 'es2018',
   },
   server: {
+    host: true,
     proxy: {
       '/ws': {
         target: 'ws://localhost:3000',
