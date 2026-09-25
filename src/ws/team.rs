@@ -152,10 +152,20 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
                                 });
                                 let _ = sender.send(Message::Text(reply.to_string().into())).await;
 
-                                let round = state.current_round.read().await;
-                                let buzzer_order = round.buzzer_order.clone();
-                                drop(round);
-                                let _ = state.tx.send(ServerMessage::BuzzerUpdate { buzzer_order });
+                                {
+                                    let round = state.current_round.read().await;
+                                    let _ = sender.send(Message::Text(
+                                        serde_json::to_string(&ServerMessage::RoundState {
+                                            state: round.state.clone(),
+                                            started_at_ms: round.started_at_ms,
+                                            server_now: chrono::Utc::now().timestamp_millis() as u64,
+                                            frozen_elapsed_ms: round.frozen_elapsed_ms,
+                                        }).unwrap().into(),
+                                    )).await;
+                                    let buzzer_order = round.buzzer_order.clone();
+                                    drop(round);
+                                    let _ = state.tx.send(ServerMessage::BuzzerUpdate { buzzer_order });
+                                }
 
                                 tracing::info!(
                                     username = %info.username,
